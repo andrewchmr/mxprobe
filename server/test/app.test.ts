@@ -2,7 +2,7 @@
 // canned verifier, fake Stripe, and a notifier that records what it sent.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hashKey, newApiKey, HttpError } from "../src/app.ts";
+import { hashKey, newApiKey, HttpError, VERSION } from "../src/app.ts";
 import { signPayload } from "../src/stripe.ts";
 import { boot, canned, fakeVerifier, jsonResponse } from "./helpers.ts";
 
@@ -422,7 +422,8 @@ test("health, 404, CORS preflight, oversized body", async () => {
     assert.equal(h.status, 200);
     assert.equal(h.body.ok, true);
     assert.equal(h.body.payments, true);
-    assert.equal(h.body.version, "0.1.0");
+    assert.equal(h.body.version, VERSION);
+    assert.match(VERSION, /^\d+\.\d+\.\d+$/, "the version comes from package.json");
     assert.deepEqual(h.body.notifier, { telegram: true, email: true });
     assert.equal(typeof h.body.uptime_s, "number");
     const nf = await t.api("GET", "/nope");

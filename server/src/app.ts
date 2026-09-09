@@ -3,6 +3,7 @@
 // database, a canned verifier and fake Stripe, Resend and Telegram.
 import { createHash, randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createRequire } from "node:module";
 import { parseAddress, checkDomain, errorMessage, summarize, type ApiErrorBody, type BalanceResponse, type CheckoutResponse, type Resolver, type SignupResponse, type Verifier, type VerifyResponse } from "mxprobe-core";
 import { createBuckets } from "./ratelimit.ts";
 import { isDisposableDomain } from "./disposable.ts";
@@ -11,7 +12,8 @@ import { signupEmail, purchaseEmail, type Notifier } from "./notify.ts";
 import type { Db, KeyRow } from "./db.ts";
 import type { FetchLike, Logger } from "./types.ts";
 
-export const VERSION = "0.1.0";
+/** The server version, read from package.json so a bump is one edit there. */
+export const VERSION: string = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 const MAX_BODY = 64 * 1024;
 const MAX_EMAILS = 100;
 

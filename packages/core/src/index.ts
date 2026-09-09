@@ -15,7 +15,10 @@
 //   `hold` never becomes `kill` on a refusal, a greylist or a catch-all. Only
 //   a 5xx that names the mailbox kills.
 
-export const VERSION = "0.1.0";
+import { createRequire } from "node:module";
+
+/** The package version, read from package.json so a bump is one edit there. */
+export const VERSION: string = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 export { parseAddress, type AddressError, type ParsedAddress, type ParseResult } from "./address.ts";
 export { checkDomain, labelWebHost, type DomainCheck, type MxHost } from "./dns.ts";
