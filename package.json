@@ -5,11 +5,19 @@
   "description": "MX Probe: email verification for AI agents. Verdicts an agent can act on: send, hold or kill.",
   "license": "MIT",
   "packageManager": "pnpm@9.11.0",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
-    "test": "pnpm -r --if-present test",
-    "test:live": "pnpm -r --if-present test:live",
-    "dev:server": "node --env-file=server/.env server/src/index.mjs",
-    "check": "node packages/cli/bin/mxprobe.mjs check"
+    "build": "pnpm -r build",
+    "typecheck": "pnpm build && pnpm -r --if-present typecheck",
+    "test": "pnpm build && pnpm -r --if-present test",
+    "test:live": "pnpm build && pnpm -r --if-present test:live",
+    "dev:server": "pnpm --filter mxprobe-server dev",
+    "check": "pnpm build && node packages/cli/dist/bin.js check"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^7.0.2"
   }
 }

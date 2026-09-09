@@ -7,4 +7,4 @@ User=mxprobe
 Group=mxprobe
 WorkingDirectory=/opt/mxprobe/server
 EnvironmentFile=/etc/mxprobe/env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/mxprobe/server/bin/healthcheck.mjs
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/mxprobe/server/dist/bin/healthcheck.js

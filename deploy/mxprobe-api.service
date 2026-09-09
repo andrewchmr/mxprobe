@@ -8,7 +8,7 @@ User=mxprobe
 Group=mxprobe
 WorkingDirectory=/opt/mxprobe/server
 EnvironmentFile=/etc/mxprobe/env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/mxprobe/server/src/index.mjs
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/mxprobe/server/dist/index.js
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

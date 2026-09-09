@@ -8,3 +8,5 @@ server/data/
 *.sqlite-*
 .DS_Store
 regression.txt
+dist/
+*.tsbuildinfo

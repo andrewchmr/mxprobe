@@ -5,13 +5,23 @@
   "description": "The hosted MX Probe API: signup, verify, balance, Stripe credits. node:http + node:sqlite, no framework.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22.13" },
-  "dependencies": { "mxprobe-core": "workspace:^" },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "mxprobe-core": "workspace:^"
+  },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/index.mjs",
-    "dev": "node --disable-warning=ExperimentalWarning --env-file=.env src/index.mjs",
-    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.mjs",
-    "admin": "node --disable-warning=ExperimentalWarning bin/admin.mjs",
-    "healthcheck": "node --disable-warning=ExperimentalWarning bin/healthcheck.mjs"
+    "build": "tsc -b",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "start": "node --disable-warning=ExperimentalWarning dist/index.js",
+    "dev": "pnpm -w build && node --disable-warning=ExperimentalWarning --env-file=.env dist/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
+    "admin": "node --disable-warning=ExperimentalWarning dist/bin/admin.js",
+    "healthcheck": "node --disable-warning=ExperimentalWarning dist/bin/healthcheck.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^7.0.2"
   }
 }

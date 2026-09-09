@@ -31,4 +31,10 @@ Options (all optional): `smtp`, `helo`, `from`, `port`, `hostOverride`,
 `autoDisableSmtp`, `resolver` (an object with `resolveMx`, `resolve4`,
 `resolve6`, `reverse`, for tests).
 
+Written in TypeScript; the package ships its declarations. `VerifyResult`,
+`Action`, `Verdict`, `SmtpCheck`, `Checks`, `Summary`, `VerifierOptions`,
+`Resolver` and the hosted API's response types (`SignupResponse`,
+`VerifyResponse`, `BalanceResponse`, `CheckoutResponse`, `ApiErrorBody`)
+are exported as types.
+
 MIT. Part of https://github.com/andrewchmr/mxprobe.

@@ -44,7 +44,8 @@ login to change the expired password. Use the new manager
 reinstall wizard in an iframe. The VPS is on manual renewal: renew before the
 expiry date or switch it to automatic in "Zarządzaj usługami".
 
-It installs Caddy, Node 24, pnpm, clones the repo to `/opt/mxprobe`, creates
+It installs Caddy, Node 24, pnpm, clones the repo to `/opt/mxprobe`, installs
+the dependencies, compiles the TypeScript to `dist/` (`pnpm build`), creates
 the `mxprobe` user, writes `/etc/mxprobe/env` from `server/.env.example`,
 installs the systemd service and the hourly health timer, and reloads Caddy.
 
@@ -70,7 +71,7 @@ Then `systemctl restart mxprobe-api`.
 # on the box
 nc -z -w 5 aspmx.l.google.com 25 && echo port25 ok
 dig +short -x $(curl -s https://api.ipify.org)          # must print probe.mxprobe.dev
-sudo -u mxprobe env $(cat /etc/mxprobe/env | xargs) node /opt/mxprobe/server/bin/healthcheck.mjs
+sudo -u mxprobe env $(cat /etc/mxprobe/env | xargs) node /opt/mxprobe/server/dist/bin/healthcheck.js
 journalctl -u mxprobe-api -f
 
 # from anywhere
@@ -86,10 +87,10 @@ Also check the IP on blocklists before the first probe: mxtoolbox.com/blacklists
 
 ```bash
 cd /opt/mxprobe/server
-DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node bin/admin.mjs stats      # the kill-rule numbers
-DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node bin/admin.mjs keys
-DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node bin/admin.mjs revoke someone@example.com
-DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node bin/admin.mjs credits someone@example.com 1000 "goodwill"
+DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node dist/bin/admin.js stats      # the kill-rule numbers
+DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node dist/bin/admin.js keys
+DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node dist/bin/admin.js revoke someone@example.com
+DB_PATH=/var/lib/mxprobe/mxprobe.sqlite node dist/bin/admin.js credits someone@example.com 1000 "goodwill"
 ```
 
 Update: re-run `install.sh`. Backup: copy the SQLite file (it is in WAL mode;

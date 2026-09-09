@@ -43,7 +43,9 @@ else
   git clone -q --branch "$BRANCH" "$REPO" "$APP"
 fi
 cd "$APP"
-pnpm install --prod --frozen-lockfile --silent
+# Dev dependencies stay: the TypeScript build runs here, on every deploy.
+pnpm install --frozen-lockfile --silent
+pnpm build
 chown -R mxprobe:mxprobe "$APP"
 
 if [ ! -f "$ENV_FILE" ]; then

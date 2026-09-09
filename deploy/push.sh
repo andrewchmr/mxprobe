@@ -16,6 +16,7 @@ $SSH 'sudo mkdir -p /opt/mxprobe /etc/mxprobe && sudo chown -R "$USER" /opt/mxpr
 rsync -az --delete \
   --include '.env.example' --exclude '.env' --exclude '.env.*' \
   --exclude node_modules --exclude .git --exclude 'server/data' --exclude '.claude' --exclude '*.sqlite*' \
+  --exclude dist --exclude '*.tsbuildinfo' \
   "$ROOT/" "$HOST:/opt/mxprobe/"
 
 if [ -f "$ROOT/server/.env.production" ]; then

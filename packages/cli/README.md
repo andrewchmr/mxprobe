@@ -45,10 +45,13 @@ environment.
 
 ## From Node
 
-```js
+```ts
 import { createClient, checkEmails } from "mxprobe";
 const client = createClient({ apiKey: process.env.MXPROBE_API_KEY });
 const { results, summary } = await checkEmails(["a@b.com"], { hosted: true, client });
 ```
+
+Typed: `Client`, `CheckOptions`, `CheckOutput` and the response types come
+with the package; `results` is `VerifyResult[]` from `mxprobe-core`.
 
 Docs: https://mxprobe.dev. Source: https://github.com/andrewchmr/mxprobe. MIT.

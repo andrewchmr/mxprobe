@@ -32,7 +32,7 @@ claude mcp add mxprobe -- npx -y mxprobe mcp # the MCP server
 
 | Path | What |
 |---|---|
-| `packages/core` | The engine: DNS tier, SMTP probe, the verdict contract. Zero dependencies. |
+| `packages/core` | The engine: DNS tier, SMTP probe, the verdict contract and the API's wire types. Zero dependencies. |
 | `packages/cli` | `npx mxprobe check | signup | balance | buy | mcp`. Also exports `createClient`. |
 | `server` | The hosted API: `node:http` + `node:sqlite`, Stripe Checkout, Resend, Telegram. |
 | `site` | The landing page, static. |
@@ -40,16 +40,26 @@ claude mcp add mxprobe -- npx -y mxprobe mcp # the MCP server
 
 ## Develop
 
+Everything is TypeScript (strict, ESM). Each package compiles its `src/` to
+`dist/` with `tsc -b`; the published packages ship `dist/` only. `mxprobe` and
+the server import `mxprobe-core` through the workspace link to its `dist/`,
+so `pnpm build` at the root (which runs the packages in dependency order) must
+come before a single package's `test` or `typecheck`. Tests are `.ts` files
+that Node runs directly with its built-in type stripping.
+
 ```bash
 pnpm install
-pnpm test                       # offline: fake resolver, fake SMTP server, in-memory SQLite
+pnpm build                      # tsc -b in each package, core first
+pnpm test                       # builds, then: fake resolver, fake SMTP server, in-memory SQLite. No network.
+pnpm typecheck                  # the sources and the tests, without emitting
 pnpm test:live                  # the DNS tier against the real network
-node packages/cli/bin/mxprobe.mjs check a@b.com
-cp server/.env.example server/.env && pnpm --filter mxprobe-server dev
+pnpm check a@b.com              # the CLI from this checkout
+cp server/.env.example server/.env && pnpm dev:server
 ```
 
-Node 22.13 or newer for the server (`node:sqlite`); the engine and CLI run on
-Node 20.
+Node 22.18 or newer (24 recommended) to develop and to run the tests; the
+compiled engine and CLI run on Node 20, the server on 22.13 or newer
+(`node:sqlite`).
 
 ## Pricing
 

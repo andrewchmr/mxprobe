@@ -4,15 +4,47 @@
   "description": "The MX Probe engine: DNS tier, SMTP probe and the send / hold / kill verdict contract. Zero dependencies.",
   "license": "MIT",
   "type": "module",
-  "main": "./src/index.mjs",
-  "exports": { ".": "./src/index.mjs" },
-  "files": ["src", "README.md"],
-  "engines": { "node": ">=20" },
-  "repository": { "type": "git", "url": "https://github.com/andrewchmr/mxprobe", "directory": "packages/core" },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andrewchmr/mxprobe",
+    "directory": "packages/core"
+  },
   "homepage": "https://mxprobe.dev",
-  "keywords": ["email", "verification", "mx", "smtp", "bounce", "ai-agent", "mcp"],
+  "keywords": [
+    "email",
+    "verification",
+    "mx",
+    "smtp",
+    "bounce",
+    "ai-agent",
+    "mcp"
+  ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
-    "test:live": "MXPROBE_LIVE=1 node --test test/*.live.mjs"
-  }
+    "build": "tsc -b",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "node --test test/*.test.ts",
+    "test:live": "MXPROBE_LIVE=1 node --test test/*.live.ts",
+    "prepack": "pnpm -w build"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^7.0.2"
+  },
+  "types": "./dist/index.d.ts"
 }
