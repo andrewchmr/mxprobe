@@ -87,13 +87,6 @@ npx mxprobe check --hosted hello@example.com   # survivors go to the hosted mail
   <h2 id="story">Why this exists</h2>
   <p>An outreach agent of mine sent 404 cold emails and took 38 bounces. About ten were the slow kind that Gmail reports days later, after they were already counted as delivered. Every one of those sat on a domain with no MX record, which a one-second DNS lookup predicts. The rest were dead mailboxes, which only an SMTP probe sees. Run on every bounced address in that log the engine returned 14 kills and 4 holds, and it killed none of the addresses that had been delivered. <a href="STORY_URL">The full write-up, with the table of 14 addresses.</a></p>
 
-  <h2>Hear when it changes</h2>
-  <form id="subscribe" action="https://api.mxprobe.dev/v1/subscribe" method="post">
-    <input type="email" name="email" placeholder="you@company.com" required>
-    <button type="submit">Notify me</button>
-  </form>
-  <p class="note" id="subscribe-note">One mail per launch. No drip.</p>
-
   <h2>Tell me what is missing</h2>
   <form id="feedback" action="https://api.mxprobe.dev/v1/feedback" method="post">
     <textarea name="message" placeholder="What would make you pay for this, or what stopped you?" required></textarea>
@@ -108,7 +101,7 @@ npx mxprobe check --hosted hello@example.com   # survivors go to the hosted mail
   </footer>
 </main>
 <script>
-  for (const id of ["subscribe", "feedback"]) {
+  for (const id of ["feedback"]) {
     const form = document.getElementById(id);
     const note = document.getElementById(id + "-note");
     form.addEventListener("submit", async (e) => {
