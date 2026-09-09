@@ -44,7 +44,10 @@ else
 fi
 cd "$APP"
 # Dev dependencies stay: the TypeScript build runs here, on every deploy.
-pnpm install --frozen-lockfile --silent
+# CI=1 answers pnpm's "reinstall from scratch?" prompt (the first deploy was
+# --prod); NODE_ENV=development keeps devDependencies whatever the shell says.
+CI=1 NODE_ENV=development pnpm install --frozen-lockfile --reporter=append-only
+test -x node_modules/.bin/tsc || { echo "!! typescript did not install; no build possible"; exit 1; }
 pnpm build
 chown -R mxprobe:mxprobe "$APP"
 
