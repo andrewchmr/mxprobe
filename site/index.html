@@ -83,7 +83,6 @@ npx mxprobe check --hosted hello@example.com   # survivors go to the hosted mail
   <h2>Price</h2>
   <p class="price">9 USD per 10,000 checks</p>
   <p>One payment, no subscription, credits never expire. 100 checks free at signup. A DNS kill from the CLI costs nothing; only the hosted mailbox probe uses credits.</p>
-  <p class="note">Payments are handled by CMS Brew, the company behind MX Probe. The card line reads CMSBREW* MXPROBE.</p>
 
   <h2 id="story">Why this exists</h2>
   <p>An outreach agent of mine sent 404 cold emails and took 38 bounces. About ten were the slow kind that Gmail reports days later, after they were already counted as delivered. Every one of those sat on a domain with no MX record, which a one-second DNS lookup predicts. The rest were dead mailboxes, which only an SMTP probe sees. Run on every bounced address in that log the engine returned 14 kills and 4 holds, and it killed none of the addresses that had been delivered. <a href="STORY_URL">The full write-up, with the table of 14 addresses.</a></p>
