@@ -71,7 +71,7 @@ Then `systemctl restart mxprobe-api`.
 # on the box
 nc -z -w 5 aspmx.l.google.com 25 && echo port25 ok
 dig +short -x $(curl -s https://api.ipify.org)          # must print probe.mxprobe.dev
-sudo -u mxprobe env $(cat /etc/mxprobe/env | xargs) node /opt/mxprobe/server/dist/bin/healthcheck.js
+sudo systemctl start mxprobe-health && journalctl -u mxprobe-health -n 3   # the hourly probe, with the real env file
 journalctl -u mxprobe-api -f
 
 # from anywhere
