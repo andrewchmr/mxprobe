@@ -73,7 +73,8 @@ export interface FakeSmtp {
   commands: string[];
   /** The most sessions open at once. */
   maxActive: number;
-  close(): void;
+  /** Resolves once the listening socket is closed. */
+  close(): Promise<void>;
 }
 
 export const MULTILINE_EHLO = "250-mx1.good.test\r\n250-SIZE 1000\r\n250 8BITMIME\r\n";
@@ -135,7 +136,7 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
         get maxActive() {
           return state.maxActive;
         },
-        close: () => server.close(),
+        close: () => new Promise<void>((done) => server.close(() => done())),
       });
     });
   });
@@ -144,7 +145,6 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
 /** A port nothing listens on. */
 export async function closedPort(): Promise<number> {
   const s = await fakeSmtp();
-  s.close();
-  await new Promise((r) => setTimeout(r, 20));
+  await s.close();
   return s.port;
 }

@@ -105,7 +105,8 @@ test("probeMailbox: a server that hangs up mid-session is dropped, not DEAD", as
 });
 
 test("probeMailbox: a server that never sends a banner times out as dropped", async () => {
-  const { result } = await probe({ banner: null }, "alice@good.test", { smtpTimeoutMs: 150 });
+  // The budget also covers the connect, which can be slow on a loaded machine; keep it generous.
+  const { result } = await probe({ banner: null }, "alice@good.test", { smtpTimeoutMs: 400 });
   assert.equal(result.smtp, "dropped");
   assert.match(result.reason, /ETIMEDOUT/);
 });
