@@ -1,0 +1,23 @@
+{
+  "name": "mxprobe",
+  "version": "0.1.0",
+  "description": "Email verification for AI agents. One call returns send, hold or kill with the reason. Free DNS tier runs locally; the hosted SMTP probe is 9 USD per 10,000 checks. CLI + MCP server.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "mxprobe": "./bin/mxprobe.mjs" },
+  "main": "./src/client.mjs",
+  "exports": { ".": "./src/client.mjs" },
+  "files": ["bin", "src", "README.md"],
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "https://github.com/andrewchmr/mxprobe", "directory": "packages/cli" },
+  "homepage": "https://mxprobe.dev",
+  "keywords": ["email", "verification", "email-verifier", "mx", "smtp", "bounce", "ai-agent", "mcp", "mcp-server", "outreach"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "mxprobe-core": "workspace:^",
+    "zod": "^4.5.4"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

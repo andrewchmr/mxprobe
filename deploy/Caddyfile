@@ -1,0 +1,22 @@
+# /etc/caddy/Caddyfile. Caddy fetches the certificates itself.
+mxprobe.dev {
+	root * /opt/mxprobe/site
+	encode gzip
+	try_files {path} {path}.html
+	file_server
+	header /llms.txt Content-Type "text/plain; charset=utf-8"
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+www.mxprobe.dev {
+	redir https://mxprobe.dev{uri} permanent
+}
+
+api.mxprobe.dev {
+	reverse_proxy 127.0.0.1:8787
+	header Strict-Transport-Security "max-age=31536000"
+}

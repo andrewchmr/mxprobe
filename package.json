@@ -1,0 +1,15 @@
+{
+  "name": "mxprobe-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MX Probe: email verification for AI agents. Verdicts an agent can act on: send, hold or kill.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.11.0",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "test:live": "pnpm -r --if-present test:live",
+    "dev:server": "node --env-file=server/.env server/src/index.mjs",
+    "check": "node packages/cli/bin/mxprobe.mjs check"
+  }
+}

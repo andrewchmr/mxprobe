@@ -1,0 +1,17 @@
+{
+  "name": "mxprobe-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The hosted MX Probe API: signup, verify, balance, Stripe credits. node:http + node:sqlite, no framework.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "dependencies": { "mxprobe-core": "workspace:^" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.mjs",
+    "dev": "node --disable-warning=ExperimentalWarning --env-file=.env src/index.mjs",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.mjs",
+    "admin": "node --disable-warning=ExperimentalWarning bin/admin.mjs",
+    "healthcheck": "node --disable-warning=ExperimentalWarning bin/healthcheck.mjs"
+  }
+}

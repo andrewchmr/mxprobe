@@ -1,0 +1,18 @@
+{
+  "name": "mxprobe-core",
+  "version": "0.1.0",
+  "description": "The MX Probe engine: DNS tier, SMTP probe and the send / hold / kill verdict contract. Zero dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": { ".": "./src/index.mjs" },
+  "files": ["src", "README.md"],
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "https://github.com/andrewchmr/mxprobe", "directory": "packages/core" },
+  "homepage": "https://mxprobe.dev",
+  "keywords": ["email", "verification", "mx", "smtp", "bounce", "ai-agent", "mcp"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:live": "MXPROBE_LIVE=1 node --test test/*.live.mjs"
+  }
+}

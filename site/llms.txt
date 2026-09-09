@@ -1,0 +1,19 @@
+# MX Probe
+
+> Email verification for AI agents. One call returns send, hold or kill for an address, with the reason. Signup and credits by API. 100 free checks at signup, then 9 USD per 10,000, one payment, credits never expire.
+
+API base: https://api.mxprobe.dev
+
+- POST /v1/signup {"email"} -> 201 {api_key, credits: 100}. No auth. One key per address. The key is also mailed.
+- POST /v1/verify {"emails": [...]} (max 100) -> {results: [{email, action, verdict, reason, checks: {syntax, mx, smtp, catch_all}}], summary, credits_used, credits_left}. Header: Authorization: Bearer <api_key>. One credit per syntactically valid address; a check whose mail server could not be reached is refunded.
+- GET /v1/balance -> {email, credits, checks_total}. Bearer.
+- POST /v1/credits/checkout {"packs": 1} -> {url, credits, amount_usd}. Bearer. Open the URL to pay 9 USD per pack of 10,000; credits land on the key when Stripe confirms.
+
+action: send (mailbox accepted), hold (catch-all, forwarder, greylist, or the server refused the probe rather than the mailbox; send only with a fallback), kill (no mail server, or the mailbox does not exist).
+Errors are JSON {error, message}: 401 missing or bad key, 402 insufficient_credits (with checkout_hint), 429 rate_limited (60 checks a minute per key, Retry-After header), 422 undeliverable or disposable signup address.
+
+CLI and MCP server (MIT): npx mxprobe check a@b.com | npx mxprobe check --hosted a@b.com | npx mxprobe mcp
+MCP tools: verify_email, verify_batch, signup, balance, buy_credits. Install: claude mcp add mxprobe -- npx -y mxprobe mcp
+
+Privacy: addresses are logged for 24 hours for debugging, then deleted. The probe never sends a message.
+Source: https://github.com/andrewchmr/mxprobe
