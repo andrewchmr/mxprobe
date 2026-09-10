@@ -51,7 +51,7 @@ test("probeMailbox: every no-such-mailbox phrasing kills, an unrelated 5xx does 
 
 test("probeMailbox: a catch-all server is WEAK with catchAll true", async () => {
   const { result } = await probe("catchall", "anyone@good.test");
-  assert.deepEqual(result, { verdict: "WEAK", reason: "mx1.good.test is catch-all, it accepts any local part", smtp: "accepted", catchAll: true });
+  assert.deepEqual(result, { verdict: "WEAK", reason: "good.test is catch-all: mx1.good.test accepts any local part, so the mailbox cannot be proven", smtp: "accepted", catchAll: true });
 });
 
 test("probeMailbox: 251 (will forward) counts as accepted", async () => {
@@ -124,7 +124,7 @@ test("probeMailbox: hostOverride wins over connectHost, which wins over the MX n
     assert.equal(viaOverride.smtp, "accepted");
     const viaConnect = await probeMailbox("a@good.test", "good.test", "mx.nowhere.invalid", { connectHost: "127.0.0.1", port: smtp.port, smtpTimeoutMs: 2000 });
     assert.equal(viaConnect.smtp, "accepted");
-    assert.match(viaConnect.reason, /mx\.nowhere\.invalid is catch-all/, "the reason names the MX, not the IP");
+    assert.match(viaConnect.reason, /catch-all: mx\.nowhere\.invalid accepts/, "the reason names the MX, not the IP");
   } finally {
     smtp.close();
   }

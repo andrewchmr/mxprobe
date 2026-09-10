@@ -153,7 +153,7 @@ export async function probeMailbox(email: string, domain: string, mxHost: string
       const c = await s.send(`RCPT TO:<${random}>`);
       result =
         c.code === 250 || c.code === 251
-          ? { verdict: "WEAK", reason: `${mxHost} is catch-all, it accepts any local part`, smtp: "accepted", catchAll: true }
+          ? { verdict: "WEAK", reason: `${domain} is catch-all: ${mxHost} accepts any local part, so the mailbox cannot be proven`, smtp: "accepted", catchAll: true }
           : { verdict: "OK", reason: `mailbox accepted by ${mxHost}`, smtp: "accepted", catchAll: false };
     } else if (r.code >= 500 && NO_SUCH_MAILBOX.test(r.text)) {
       result = { verdict: "DEAD", reason: `${mxHost} says the mailbox does not exist (${firstLine(r)})`, smtp: "rejected", catchAll: null };
