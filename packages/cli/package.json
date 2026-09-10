@@ -26,7 +26,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/andrewchmr/mxprobe",
+    "url": "git+https://github.com/andrewchmr/mxprobe.git",
     "directory": "packages/cli"
   },
   "homepage": "https://mxprobe.dev",

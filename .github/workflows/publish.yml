@@ -1,0 +1,91 @@
+# Publishes mxprobe-core and mxprobe to npm with provenance, then makes the
+# GitHub Release. It runs when a tag v<version> is pushed, and the tag must
+# equal the version in both packages.
+#
+# Auth is npm trusted publishing (OIDC), so there is no token and no OTP:
+# on npmjs.com each package lists this file as its trusted publisher
+# (owner andrewchmr, repository mxprobe, workflow publish.yml).
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # the GitHub Release
+  id-token: write # npm trusted publishing and the provenance attestation
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the release notes need the previous tag
+
+      - uses: pnpm/action-setup@v6 # reads packageManager from package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # bundles npm 11.5+, which trusted publishing needs
+          package-manager-cache: false # no cache in a release build
+
+      - name: Check that the tag matches both package versions
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for dir in packages/core packages/cli; do
+            found="$(node -p "require('./$dir/package.json').version")"
+            if [ "$found" != "$version" ]; then
+              echo "::error::$dir is at $found, the tag is $version"
+              exit 1
+            fi
+          done
+          echo "npm $(npm --version)"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test # builds, then runs the core, cli and server tests
+
+      - name: Pack both packages
+        run: |
+          mkdir -p tarballs
+          pnpm -C packages/core pack --pack-destination "$PWD/tarballs"
+          pnpm -C packages/cli pack --pack-destination "$PWD/tarballs"
+          ls -l tarballs
+
+      # Core first: the cli depends on mxprobe-core at the same version.
+      # A version that is already on npm is skipped, so a re-run is safe.
+      - name: Publish to npm (trusted publishing adds the provenance attestation)
+        working-directory: tarballs
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for name in mxprobe-core mxprobe; do
+            if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+              echo "$name@$version is already on npm, skipped"
+              continue
+            fi
+            npm publish "$name-$version.tgz" --provenance --access public
+          done
+
+      - name: Make the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME exists, skipped"
+            exit 0
+          fi
+          previous="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            changes="$(git log --reverse --format='- %s' "$previous..$GITHUB_REF_NAME")"
+            compare="**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${GITHUB_REF_NAME}"
+          else
+            changes="$(git log --reverse --format='- %s' "$GITHUB_REF_NAME")"
+            compare=""
+          fi
+          printf '%s\n\nnpm: mxprobe %s, mxprobe-core %s\n\n%s\n' \
+            "$changes" "$version" "$version" "$compare" > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$version" --notes-file notes.md
