@@ -1,7 +1,7 @@
 {
   "name": "mxprobe-server",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The hosted MX Probe API: signup, verify, balance, Stripe credits. node:http + node:sqlite, no framework.",
   "license": "MIT",
   "type": "module",
