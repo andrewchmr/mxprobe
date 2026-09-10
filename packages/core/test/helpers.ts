@@ -71,7 +71,7 @@ export interface FakeSmtp {
   port: number;
   /** Every command line received, in order, across all sessions. */
   commands: string[];
-  /** The most sessions open at once. */
+  /** The most sessions in dialogue at once. A session ends at QUIT or when its socket closes, whichever comes first. */
   maxActive: number;
   /** Resolves once the listening socket is closed. */
   close(): Promise<void>;
@@ -100,9 +100,18 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
   const state = { commands: [] as string[], active: 0, maxActive: 0 };
 
   const server = net.createServer((sock) => {
+    // Count the dialogue, not the TCP connection: the client releases its
+    // concurrency slot as soon as QUIT is answered, and the close event for
+    // that socket can land after the next connection has already opened.
+    let open = true;
+    const release = (): void => {
+      if (!open) return;
+      open = false;
+      state.active--;
+    };
     state.active++;
     state.maxActive = Math.max(state.maxActive, state.active);
-    sock.on("close", () => state.active--);
+    sock.on("close", release);
     if (banner === null) return;
     if (!banner.startsWith("220")) return void sock.end(banner);
     sock.write(banner);
@@ -121,7 +130,10 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
         else if (cmd.startsWith("HELO")) sock.write(helo);
         else if (verb === "MAIL FROM") sock.write(mailFrom);
         else if (verb === "RCPT TO") sock.write(rcpt(line.match(/<([^>]+)>/)?.[1] ?? ""));
-        else if (cmd.startsWith("QUIT")) sock.end("221 bye\r\n");
+        else if (cmd.startsWith("QUIT")) {
+          release();
+          sock.end("221 bye\r\n");
+        }
         else sock.write("500 unknown\r\n");
       }
     });
