@@ -5,7 +5,7 @@ for an address, with the reason. Signup and credits happen by API too, so an
 outreach agent can provision itself. No form, no CAPTCHA, no dashboard.
 
 - Site and docs: https://mxprobe.dev
-- API: https://api.mxprobe.dev (it describes itself on `GET /`)
+- API: https://api.mxprobe.dev (it describes itself on `GET /`). OpenAPI: https://mxprobe.dev/openapi.json. For agents: https://mxprobe.dev/llms.txt
 - npm: [`mxprobe`](https://www.npmjs.com/package/mxprobe) (CLI + MCP server), [`mxprobe-core`](https://www.npmjs.com/package/mxprobe-core) (the engine)
 
 ```bash

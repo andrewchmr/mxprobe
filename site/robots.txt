@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /paid
+
+Sitemap: https://mxprobe.dev/sitemap.xml

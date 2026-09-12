@@ -1,0 +1,105 @@
+# MX Probe
+
+> Email verification for AI agents. One call returns send, hold or kill for an address, with the reason. Signup and credits by API, so an outreach agent can provision itself. No form, no CAPTCHA, no dashboard. 100 free checks at signup, then 9 USD per 10,000, one payment, credits never expire.
+
+Site: https://mxprobe.dev
+API base: https://api.mxprobe.dev (GET / describes itself)
+OpenAPI 3.1: https://mxprobe.dev/openapi.json
+Short version of this file: https://mxprobe.dev/llms.txt
+npm: mxprobe (CLI + MCP server), mxprobe-core (the engine). Both MIT.
+Source: https://github.com/andrewchmr/mxprobe
+Contact: hello@mxprobe.dev
+
+## The verdict contract
+
+Every result, from the API, the CLI and the MCP server, has the same shape:
+
+{
+  "email": "hello@example.com",
+  "action": "send",
+  "verdict": "OK",
+  "reason": "mailbox accepted by aspmx.l.google.com",
+  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "smtp": "accepted", "catch_all": false }
+}
+
+action:
+- send: the mail server accepted the mailbox. Go ahead.
+- hold: send only with a fallback in hand. A catch-all domain, a forwarder, a greylist, or a server that refused the probe rather than the mailbox. A hold never becomes a kill on a refusal.
+- kill: never send. The domain has no mail server, or the mail server said the mailbox does not exist. Only a 5xx that names the mailbox kills.
+
+verdict: OK, WEAK or DEAD. It mirrors action (send, hold, kill) for callers that prefer a quality word to an instruction.
+
+checks:
+- syntax: whether the address parses.
+- mx: the mail exchanger that was asked, or null when the domain has none.
+- smtp: skipped (the DNS tier already decided, or the free tier), accepted, rejected, refused, deferred, unreachable (refunded), dropped.
+- catch_all: whether the domain accepts any mailbox; null when not tested.
+
+Two tiers:
+- DNS tier: free, runs locally in the CLI and the MCP server with no key. Finds every domain that cannot receive mail, in about a second for a whole list.
+- Hosted SMTP tier: asks the mail server whether the mailbox exists, without sending a message. One credit per syntactically valid address.
+
+## Hosted API
+
+All bodies and responses are JSON. Errors are {error, message} plus route-specific extras. Auth is Authorization: Bearer <api_key> (X-API-Key also works).
+
+POST /v1/signup {"email"} -> 201 {api_key, email, credits: 100, mailed, message}
+  No auth. One key per address; the key is shown once and also mailed. 3 signups a day per IP.
+  Errors: 400 invalid_email, 409 already_registered, 422 disposable_domain or undeliverable_email, 429 too_many_signups or rate_limited.
+
+POST /v1/verify {"emails": ["a@b.com", ...]} (max 100) or {"email": "a@b.com"} -> 200 {results: [VerifyResult], summary: {send, hold, kill, total}, credits_used, credits_left}
+  Bearer. One credit per syntactically valid address; duplicates collapse; a check whose mail server could not be reached is refunded. 60 checks a minute per key.
+  Errors: 400 no_emails, too_many_emails (max: 100), invalid_emails; 401 missing_api_key or invalid_api_key; 402 insufficient_credits with credits_left, needed and checkout_hint; 403 key_revoked; 413 body_too_large (64 KB); 429 rate_limited with retry_after_seconds and a Retry-After header.
+
+GET /v1/balance -> 200 {email, credits, checks_total, created_at}
+  Bearer.
+
+POST /v1/credits/checkout {"packs": 1} -> 200 {url, credits, amount_usd, packs, session_id, message}
+  Bearer. 9 USD per pack of 10,000, up to 100 packs. Open the URL to pay; credits land on the key when Stripe confirms, and a confirmation is mailed.
+  Errors: 503 payments_not_configured.
+
+GET /v1/health -> {ok, version, uptime_s, notifier, payments}
+
+An agent's full loop: POST /v1/signup with the operator's address, keep api_key, POST /v1/verify before every send, on 402 POST /v1/credits/checkout and hand the URL to the operator.
+
+## CLI
+
+npx mxprobe check hello@example.com ops@example.org   # free, local, no key
+npx mxprobe signup you@company.com                    # a key by API, 100 free checks, saved to ~/.config/mxprobe
+npx mxprobe check --hosted hello@example.com          # DNS kills stay local; survivors go to the mailbox probe
+npx mxprobe balance
+npx mxprobe buy                                       # a Stripe link: 9 USD per 10,000, credits never expire
+npx mxprobe mcp                                       # the MCP server on stdio
+
+Node 20 or newer. Set MXPROBE_API_KEY to use a key from the environment.
+
+## MCP server
+
+claude mcp add mxprobe -- npx -y mxprobe mcp
+
+Any client: {"mcpServers":{"mxprobe":{"command":"npx","args":["-y","mxprobe","mcp"]}}}
+
+Tools:
+- verify_email {email, hosted?}: one address. Hosted probe when a key is configured and hosted is not false; otherwise the free DNS tier.
+- verify_batch {emails (1 to 500), hosted?}: a list. DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each.
+- signup {email}: creates a key with 100 free checks, saves it locally for the other tools, and mails it.
+- balance {}: credits left on the configured key.
+- buy_credits {packs?}: a Stripe Checkout link, 9 USD per 10,000.
+
+Registry name: io.github.andrewchmr/mxprobe
+
+## From Node
+
+import { createClient, checkEmails } from "mxprobe";
+const client = createClient({ apiKey: process.env.MXPROBE_API_KEY });
+const { results, summary } = await checkEmails(["a@b.com"], { hosted: true, client });
+
+Typed: Client, CheckOptions, CheckOutput and the response types come with the package; results is VerifyResult[] from mxprobe-core. mxprobe-core has zero dependencies and exports the DNS tier, the SMTP probe, the verdict contract and the API's wire types.
+
+## Pricing
+
+100 checks free at signup. Then 9 USD per 10,000 checks, one payment, no subscription, credits never expire. A DNS kill from the CLI costs nothing; only the hosted mailbox probe uses credits. Unreachable mail servers are refunded.
+
+## Privacy
+
+Addresses are logged for 24 hours for debugging, then deleted. They never leave the server except to the mail exchanger being asked. The probe never sends a message. Security contact: https://mxprobe.dev/.well-known/security.txt

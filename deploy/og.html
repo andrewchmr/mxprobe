@@ -1,0 +1,31 @@
+<!-- The source of site/og.png. Render at 1200x630 with headless Chromium:
+  chrome --headless --no-sandbox --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 --screenshot=site/og.png file://$PWD/deploy/og.html -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin:0; width:1200px; height:630px; overflow:hidden; }
+  body { background:#0c0c0c; color:#ededed; font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif; }
+  .card { position:relative; width:1200px; height:630px; padding:72px 80px; box-sizing:border-box; }
+  .brand { display:flex; align-items:center; gap:18px; font-size:30px; font-weight:700; letter-spacing:-0.01em; }
+  .logo { width:44px; height:44px; border-radius:10px; background:#1a1a1a; display:flex; align-items:center; justify-content:center; }
+  .logo i { width:18px; height:18px; border-radius:50%; background:#22c55e; display:block; }
+  h1 { font-size:66px; line-height:1.1; margin:70px 0 28px; letter-spacing:-0.02em; font-weight:700; max-width:1000px; }
+  .sub { font-size:32px; line-height:1.35; color:#9a9a9a; max-width:1000px; margin:0; }
+  .send { color:#22c55e; font-weight:700; } .hold { color:#f59e0b; font-weight:700; } .kill { color:#ef4444; font-weight:700; }
+  .code { position:absolute; left:80px; bottom:72px; font-family:"Liberation Mono","DejaVu Sans Mono",monospace; font-size:24px; color:#c8c8c8; background:#161616; border:1px solid #262626; border-radius:12px; padding:18px 26px; }
+  .code b { color:#ededed; font-weight:400; }
+  .url { position:absolute; right:80px; bottom:88px; font-size:28px; color:#9a9a9a; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand"><span class="logo"><i></i></span>MX Probe</div>
+  <h1>Email verification for AI agents</h1>
+  <p class="sub">One call returns <span class="send">send</span>, <span class="hold">hold</span> or <span class="kill">kill</span>, with the reason. Signup and credits by API. No form, no CAPTCHA, no dashboard.</p>
+  <div class="code">claude mcp add mxprobe -- npx -y mxprobe mcp</div>
+  <div class="url">mxprobe.dev</div>
+</div>
+</body>
+</html>

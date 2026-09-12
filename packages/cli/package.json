@@ -30,6 +30,7 @@
     "directory": "packages/cli"
   },
   "homepage": "https://mxprobe.dev",
+  "mcpName": "io.github.andrewchmr/mxprobe",
   "keywords": [
     "email",
     "verification",

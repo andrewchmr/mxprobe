@@ -1,0 +1,768 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MX Probe API",
+    "version": "0.2.2",
+    "summary": "Email verification for AI agents",
+    "description": "One call returns `send`, `hold` or `kill` for an email address, with the reason. Signup and credits happen by API too, so an agent can provision itself.\n\n`action` is `send`, `hold` or `kill`; `verdict` is `OK`, `WEAK` or `DEAD`. A `hold` never becomes a `kill` on a refusal, a greylist or a catch-all. Only a 5xx that names the mailbox kills.\n\n100 checks free at signup, then 9 USD per 10,000, one payment, credits never expire. Addresses are logged for 24 hours for debugging, then deleted. The probe never sends a message.",
+    "termsOfService": "https://mxprobe.dev/",
+    "contact": {
+      "name": "MX Probe",
+      "url": "https://mxprobe.dev",
+      "email": "hello@mxprobe.dev"
+    },
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "externalDocs": {
+    "description": "Site, docs and llms.txt",
+    "url": "https://mxprobe.dev"
+  },
+  "servers": [
+    {
+      "url": "https://api.mxprobe.dev"
+    }
+  ],
+  "tags": [
+    {
+      "name": "verify",
+      "description": "Check addresses"
+    },
+    {
+      "name": "account",
+      "description": "Keys and credits"
+    },
+    {
+      "name": "meta",
+      "description": "Self-description and health"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "operationId": "describe",
+        "summary": "The API describes itself",
+        "description": "Name, version, pricing, the endpoints and the verdict vocabulary. No auth.",
+        "responses": {
+          "200": {
+            "description": "The description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "operationId": "health",
+        "summary": "Health",
+        "responses": {
+          "200": {
+            "description": "The server is up and the database answers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "version",
+                    "uptime_s"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "uptime_s": {
+                      "type": "integer"
+                    },
+                    "notifier": {
+                      "type": "boolean"
+                    },
+                    "payments": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/signup": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "operationId": "signup",
+        "summary": "Create an API key",
+        "description": "One key per address. The key is returned once and also mailed. 100 free checks are on it. Limited to 3 signups a day per IP and 10 requests an hour per IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Where the key is mailed. Not a disposable domain."
+                  }
+                }
+              },
+              "example": {
+                "email": "you@company.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupResponse"
+                },
+                "example": {
+                  "api_key": "mxp_0123456789abcdef0123456789abcdef",
+                  "email": "you@company.com",
+                  "credits": 100,
+                  "mailed": true,
+                  "message": "Keep this key; it is shown once and was mailed to you. Send it as Authorization: Bearer <key>. 100 free checks are on it."
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "description": "This address already has a key (`already_registered`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`disposable_domain` or `undeliverable_email`: the key could not be mailed there",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/verify": {
+      "post": {
+        "tags": [
+          "verify"
+        ],
+        "operationId": "verify",
+        "summary": "Verify up to 100 addresses",
+        "description": "One credit per syntactically valid address; duplicates are collapsed. A check whose mail server could not be reached (`checks.smtp` = `unreachable`) is refunded. 60 checks a minute per key.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "emails": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "description": "The addresses to check"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "A single address, as an alternative to `emails`"
+                  }
+                }
+              },
+              "example": {
+                "emails": [
+                  "hello@example.com",
+                  "nobody@example.org"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A result per address, in the order sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResponse"
+                },
+                "example": {
+                  "results": [
+                    {
+                      "email": "hello@example.com",
+                      "action": "send",
+                      "verdict": "OK",
+                      "reason": "mailbox accepted by aspmx.l.google.com",
+                      "checks": {
+                        "syntax": true,
+                        "mx": "aspmx.l.google.com",
+                        "smtp": "accepted",
+                        "catch_all": false
+                      }
+                    },
+                    {
+                      "email": "nobody@example.org",
+                      "action": "kill",
+                      "verdict": "DEAD",
+                      "reason": "example.org has no mail server",
+                      "checks": {
+                        "syntax": true,
+                        "mx": null,
+                        "smtp": "skipped",
+                        "catch_all": null
+                      }
+                    }
+                  ],
+                  "summary": {
+                    "send": 1,
+                    "hold": 0,
+                    "kill": 1,
+                    "total": 2
+                  },
+                  "credits_used": 2,
+                  "credits_left": 98
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "description": "`insufficient_credits`. `checkout_hint` says how to buy more.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                },
+                "example": {
+                  "error": "insufficient_credits",
+                  "message": "This call needs 2 credits and the key has 0.",
+                  "credits_left": 0,
+                  "needed": 2,
+                  "checkout_hint": "POST https://api.mxprobe.dev/v1/credits/checkout returns a payment link: 9 USD per 10,000 checks, credits never expire."
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Revoked"
+          },
+          "413": {
+            "description": "Body over 64 KB (`body_too_large`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/balance": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "operationId": "balance",
+        "summary": "Credits left on the key",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                },
+                "example": {
+                  "email": "you@company.com",
+                  "credits": 98,
+                  "checks_total": 2,
+                  "created_at": "2026-09-12T17:00:00.000Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Revoked"
+          }
+        }
+      }
+    },
+    "/v1/credits/checkout": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "operationId": "checkout",
+        "summary": "Get a payment link for more credits",
+        "description": "Returns a Stripe Checkout URL. 9 USD per pack of 10,000 checks, up to 100 packs. Credits land on the key when Stripe confirms the payment; a confirmation is mailed.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "packs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 1,
+                    "description": "How many packs of 10,000"
+                  }
+                }
+              },
+              "example": {
+                "packs": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The payment link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                },
+                "example": {
+                  "url": "https://checkout.stripe.com/c/pay/cs_live_...",
+                  "credits": 10000,
+                  "amount_usd": 9,
+                  "packs": 1,
+                  "session_id": "cs_live_...",
+                  "message": "Open the URL to pay. Credits land on the key when Stripe confirms the payment."
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Revoked"
+          },
+          "503": {
+            "description": "Payments are not configured on this server (`payments_not_configured`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "`Authorization: Bearer <api_key>`"
+      },
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "The same key, as a header"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "`invalid_json`, `invalid_email`, `no_emails`, `too_many_emails` (with `max`) or `invalid_emails`",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "`missing_api_key` or `invalid_api_key`",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "Revoked": {
+        "description": "`key_revoked`",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "`rate_limited` or `too_many_signups`. `retry_after_seconds` in the body and a `Retry-After` header.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds to wait"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Action": {
+        "type": "string",
+        "enum": [
+          "send",
+          "hold",
+          "kill"
+        ],
+        "description": "`send`: the mail server accepted the mailbox. `hold`: send only with a fallback in hand (catch-all, forwarder, greylist, or the server refused the probe rather than the mailbox). `kill`: never send (no mail server, or the mailbox does not exist)."
+      },
+      "Verdict": {
+        "type": "string",
+        "enum": [
+          "OK",
+          "WEAK",
+          "DEAD"
+        ]
+      },
+      "SmtpCheck": {
+        "type": "string",
+        "enum": [
+          "skipped",
+          "accepted",
+          "rejected",
+          "refused",
+          "deferred",
+          "unreachable",
+          "dropped"
+        ],
+        "description": "What the SMTP tier said. `skipped` when the DNS tier already decided. `unreachable` is refunded."
+      },
+      "Checks": {
+        "type": "object",
+        "required": [
+          "syntax",
+          "mx",
+          "smtp",
+          "catch_all"
+        ],
+        "properties": {
+          "syntax": {
+            "type": "boolean"
+          },
+          "mx": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The mail exchanger asked, or null when the domain has none"
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/SmtpCheck"
+          },
+          "catch_all": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the domain accepts any mailbox; null when not tested"
+          }
+        }
+      },
+      "VerifyResult": {
+        "type": "object",
+        "required": [
+          "email",
+          "action",
+          "verdict",
+          "reason",
+          "checks"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
+          "reason": {
+            "type": "string",
+            "description": "One sentence an agent can log or show"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/Checks"
+          }
+        }
+      },
+      "Summary": {
+        "type": "object",
+        "required": [
+          "send",
+          "hold",
+          "kill",
+          "total"
+        ],
+        "properties": {
+          "send": {
+            "type": "integer"
+          },
+          "hold": {
+            "type": "integer"
+          },
+          "kill": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "required": [
+          "results",
+          "summary",
+          "credits_used",
+          "credits_left"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VerifyResult"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "credits_used": {
+            "type": "integer",
+            "description": "Billable addresses minus refunds"
+          },
+          "credits_left": {
+            "type": "integer"
+          }
+        }
+      },
+      "SignupResponse": {
+        "type": "object",
+        "required": [
+          "api_key",
+          "email",
+          "credits",
+          "mailed",
+          "message"
+        ],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "Shown once. `mxp_` and 32 hex characters."
+          },
+          "email": {
+            "type": "string"
+          },
+          "credits": {
+            "type": "integer"
+          },
+          "mailed": {
+            "type": "boolean",
+            "description": "Whether the key was also mailed"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "required": [
+          "email",
+          "credits",
+          "checks_total",
+          "created_at"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "credits": {
+            "type": "integer"
+          },
+          "checks_total": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CheckoutResponse": {
+        "type": "object",
+        "required": [
+          "url",
+          "credits",
+          "amount_usd",
+          "packs",
+          "session_id",
+          "message"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The Stripe Checkout page"
+          },
+          "credits": {
+            "type": "integer"
+          },
+          "amount_usd": {
+            "type": "number"
+          },
+          "packs": {
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "A stable snake_case code"
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened and what to do"
+          },
+          "retry_after_seconds": {
+            "type": "integer"
+          },
+          "credits_left": {
+            "type": "integer"
+          },
+          "needed": {
+            "type": "integer"
+          },
+          "checkout_hint": {
+            "type": "string"
+          },
+          "max": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

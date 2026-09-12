@@ -1,0 +1,5 @@
+Contact: mailto:hello@mxprobe.dev
+Expires: 2027-09-12T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://mxprobe.dev/.well-known/security.txt
+Policy: https://github.com/andrewchmr/mxprobe#readme

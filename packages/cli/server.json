@@ -1,0 +1,40 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.andrewchmr/mxprobe",
+  "title": "MX Probe",
+  "description": "Email verification for AI agents: send, hold or kill with the reason. Signup and credits by API.",
+  "version": "0.2.2",
+  "websiteUrl": "https://mxprobe.dev",
+  "repository": {
+    "url": "https://github.com/andrewchmr/mxprobe",
+    "source": "github",
+    "subfolder": "packages/cli"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "mxprobe",
+      "version": "0.2.2",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "valueHint": "mcp",
+          "value": "mcp",
+          "description": "Start the MCP server on stdio",
+          "isRequired": true
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "MXPROBE_API_KEY",
+          "description": "Hosted-tier API key from POST /v1/signup or the signup tool. Without it the verify tools run the free local DNS tier.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

@@ -366,6 +366,8 @@ export function createApp({ db, verifier, notifier, config, fetchImpl = fetch, l
         name: "MX Probe API",
         version: VERSION,
         docs: cfg.siteUrl,
+        openapi: `${cfg.siteUrl}/openapi.json`,
+        llms_txt: `${cfg.siteUrl}/llms.txt`,
         pricing: `${cfg.freeCredits} free checks at signup, then ${cfg.packUsd} USD per ${cfg.packCredits.toLocaleString("en-US")} checks, one payment, no expiry`,
         endpoints: {
           "POST /v1/signup": '{"email"} -> {api_key, credits}. No auth.',

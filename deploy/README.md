@@ -99,3 +99,30 @@ Update: re-run `install.sh`. Backup: copy the SQLite file (it is in WAL mode;
 Kill switch (2026-10-20 rule): `systemctl disable --now mxprobe-api
 mxprobe-health.timer`, keep the SQLite backup, cancel the VPS. The CLI's DNS
 tier keeps working with no server.
+
+## 6. Listings
+
+What the site serves for crawlers, agents and link previews, all static
+files in `site/`: `og.png` (the link-preview card, 1200x630, rendered from
+`deploy/og.html` with headless Chromium, the command is in that file), `robots.txt`, `sitemap.xml`,
+`llms.txt` and `llms-full.txt`, `openapi.json` (OpenAPI 3.1; `npx
+@redocly/cli lint site/openapi.json` checks it), `.well-known/security.txt`
+(its `Expires` is a year out; bump it). The API's `GET /` links the OpenAPI
+and llms.txt. Bump the `version` in `openapi.json` with the packages.
+
+MCP Registry: `packages/cli/server.json` is the manifest and
+`packages/cli/package.json` carries `mcpName: io.github.andrewchmr/mxprobe`,
+which the registry reads from the *published* npm package to prove
+ownership. So publish the npm version first (tag `v<version>`), then, with
+`server.json`'s two `version` fields at that version:
+
+```bash
+brew install mcp-publisher      # or the release tarball, see registry.modelcontextprotocol.io
+cd packages/cli
+mcp-publisher login github
+mcp-publisher publish
+```
+
+Smithery, Glama and PulseMCP read the same manifest and the npm package;
+submit the GitHub URL there once. GitHub topics to set on the repo:
+`email-verification`, `email-validation`, `mcp-server`, `ai-agents`, `smtp`.

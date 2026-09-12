@@ -3,6 +3,8 @@
 > Email verification for AI agents. One call returns send, hold or kill for an address, with the reason. Signup and credits by API. 100 free checks at signup, then 9 USD per 10,000, one payment, credits never expire.
 
 API base: https://api.mxprobe.dev
+OpenAPI 3.1: https://mxprobe.dev/openapi.json
+Full version of this file: https://mxprobe.dev/llms-full.txt
 
 - POST /v1/signup {"email"} -> 201 {api_key, credits: 100}. No auth. One key per address. The key is also mailed.
 - POST /v1/verify {"emails": [...]} (max 100) -> {results: [{email, action, verdict, reason, checks: {syntax, mx, smtp, catch_all}}], summary, credits_used, credits_left}. Header: Authorization: Bearer <api_key>. One credit per syntactically valid address; a check whose mail server could not be reached is refunded.
