@@ -138,6 +138,5 @@ by URL there): `deploy/mcpb.sh <version>` builds it from the npm package and
 the GitHub repo on its own (https://glama.ai/mcp/servers/andrewchmr/mxprobe);
 PulseMCP imports from the official registry; mcp.so only has a paid listing.
 
-Smithery, Glama and PulseMCP read the same manifest and the npm package;
-submit the GitHub URL there once. GitHub topics to set on the repo:
+GitHub topics set on the repo:
 `email-verification`, `email-validation`, `mcp-server`, `ai-agents`, `smtp`.
