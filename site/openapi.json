@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MX Probe API",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "summary": "Email verification for AI agents",
     "description": "One call returns `send`, `hold` or `kill` for an email address, with the reason. Signup and credits happen by API too, so an agent can provision itself.\n\n`action` is `send`, `hold` or `kill`; `verdict` is `OK`, `WEAK` or `DEAD`. A `hold` never becomes a `kill` on a refusal, a greylist or a catch-all. Only a 5xx that names the mailbox kills.\n\n100 checks free at signup, then 9 USD per 10,000, one payment, credits never expire. Addresses are logged for 24 hours for debugging, then deleted. The probe never sends a message.",
     "termsOfService": "https://mxprobe.dev/",
