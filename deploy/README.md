@@ -111,7 +111,7 @@ files in `site/`: `og.png` (the link-preview card, 1200x630, rendered from
 and llms.txt. Bump the `version` in `openapi.json` with the packages.
 
 MCP Registry: `packages/cli/server.json` is the manifest and
-`packages/cli/package.json` carries `mcpName: io.github.andrewchmr/mxprobe`,
+`packages/cli/package.json` carries `mcpName: dev.mxprobe/mxprobe`,
 which the registry reads from the *published* npm package to prove
 ownership. So publish the npm version first (tag `v<version>`), then, with
 `server.json`'s two `version` fields at that version:
@@ -119,9 +119,16 @@ ownership. So publish the npm version first (tag `v<version>`), then, with
 ```bash
 brew install mcp-publisher      # or the release tarball, see registry.modelcontextprotocol.io
 cd packages/cli
-mcp-publisher login github
+KEY=~/.config/mxprobe/mcp-registry-ed25519.pem   # outside the repo; lose it and regenerate both files
+mcp-publisher login http --domain mxprobe.dev --private-key "$(openssl pkey -in $KEY -noout -text | grep -A3 priv: | tail -n +2 | tr -d ' :\n')"
 mcp-publisher publish
 ```
+
+The `dev.mxprobe` namespace is proven by `site/.well-known/mcp-registry-auth`,
+which holds the Ed25519 public key of that file (`openssl` must be OpenSSL 3,
+`/opt/homebrew/opt/openssl@3/bin/openssl`; the system LibreSSL has no Ed25519).
+The GitHub namespace `io.github.andrewchmr/*` would need `mcp-publisher login
+github`, an interactive device flow.
 
 Smithery, Glama and PulseMCP read the same manifest and the npm package;
 submit the GitHub URL there once. GitHub topics to set on the repo:

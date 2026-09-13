@@ -1,7 +1,7 @@
 {
   "name": "mxprobe-monorepo",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "MX Probe: email verification for AI agents. Verdicts an agent can act on: send, hold or kill.",
   "license": "MIT",
   "packageManager": "pnpm@9.11.0",

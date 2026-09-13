@@ -86,7 +86,7 @@ Tools:
 - balance {}: credits left on the configured key.
 - buy_credits {packs?}: a Stripe Checkout link, 9 USD per 10,000.
 
-Registry name: io.github.andrewchmr/mxprobe
+Registry name: dev.mxprobe/mxprobe
 
 ## From Node
 

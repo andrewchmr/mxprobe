@@ -7,6 +7,7 @@ mxprobe.dev {
 	header /llms.txt Content-Type "text/plain; charset=utf-8"
 	header /llms-full.txt Content-Type "text/plain; charset=utf-8"
 	header /.well-known/security.txt Content-Type "text/plain; charset=utf-8"
+	header /.well-known/mcp-registry-auth Content-Type "text/plain; charset=utf-8"
 	header /openapi.json Access-Control-Allow-Origin "*"
 	header {
 		Strict-Transport-Security "max-age=31536000"
