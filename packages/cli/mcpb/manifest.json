@@ -1,0 +1,145 @@
+{
+  "manifest_version": "0.3",
+  "name": "mxprobe",
+  "display_name": "MX Probe",
+  "version": "VERSION",
+  "description": "Email verification for AI agents: send, hold or kill with the reason. Signup and credits by API.",
+  "long_description": "One call returns `send`, `hold` or `kill` for an address, with the reason. The free DNS tier runs locally with no key. With an API key the survivors go to the hosted SMTP probe (9 USD per 10,000 checks, 100 free at signup). The `signup` tool creates the key, so an outreach agent provisions itself. No dashboard, no CAPTCHA.",
+  "author": {
+    "name": "Andriy Chemerinskiy",
+    "url": "https://mxprobe.dev"
+  },
+  "homepage": "https://mxprobe.dev",
+  "documentation": "https://mxprobe.dev/llms.txt",
+  "support": "mailto:hello@mxprobe.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andrewchmr/mxprobe"
+  },
+  "license": "MIT",
+  "keywords": [
+    "email",
+    "verification",
+    "email-verifier",
+    "mx",
+    "smtp",
+    "bounce",
+    "ai-agent",
+    "outreach"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "node_modules/mxprobe/dist/bin.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/node_modules/mxprobe/dist/bin.js",
+        "mcp"
+      ],
+      "env": {
+        "MXPROBE_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "verify_email",
+      "description": "Verify one address: send, hold or kill with the reason.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to check"
+          },
+          "hosted": {
+            "type": "boolean",
+            "description": "Probe on the hosted tier (default: yes when a key is configured)"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      }
+    },
+    {
+      "name": "verify_batch",
+      "description": "Verify up to 500 addresses in one call.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 500,
+            "description": "The addresses to check"
+          },
+          "hosted": {
+            "type": "boolean",
+            "description": "Probe on the hosted tier (default: yes when a key is configured)"
+          }
+        },
+        "required": [
+          "emails"
+        ]
+      }
+    },
+    {
+      "name": "signup",
+      "description": "Create a hosted-tier API key with 100 free checks and save it for the other tools.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The operator's email address, where the key is mailed"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      }
+    },
+    {
+      "name": "balance",
+      "description": "Credits left on the configured key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "buy_credits",
+      "description": "A Stripe Checkout link for more credits, 9 USD per 10,000.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "packs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "How many packs of 10,000 (default 1)"
+          }
+        }
+      }
+    }
+  ],
+  "tools_generated": false,
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "MX Probe API key",
+      "description": "Optional. From the signup tool or POST https://api.mxprobe.dev/v1/signup. Without it the verify tools run the free local DNS tier only.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}

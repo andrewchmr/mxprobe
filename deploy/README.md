@@ -130,6 +130,14 @@ which holds the Ed25519 public key of that file (`openssl` must be OpenSSL 3,
 The GitHub namespace `io.github.andrewchmr/*` would need `mcp-publisher login
 github`, an interactive device flow.
 
+Other directories (2026-09-13): Smithery lists the server as
+`andrzej-chem/mxprobe` from an MCPB bundle (stdio servers cannot be published
+by URL there): `deploy/mcpb.sh <version>` builds it from the npm package and
+`packages/cli/mcpb/manifest.json`, then `npx -y @smithery/cli mcp publish
+<bundle> -n andrzej-chem/mxprobe` (after `smithery auth login`). Glama indexes
+the GitHub repo on its own (https://glama.ai/mcp/servers/andrewchmr/mxprobe);
+PulseMCP imports from the official registry; mcp.so only has a paid listing.
+
 Smithery, Glama and PulseMCP read the same manifest and the npm package;
 submit the GitHub URL there once. GitHub topics to set on the repo:
 `email-verification`, `email-validation`, `mcp-server`, `ai-agents`, `smtp`.
