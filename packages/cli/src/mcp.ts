@@ -13,6 +13,13 @@ import { errorMessage, type VerifierOptions } from "mxprobe-core";
 const VERDICT_DOC =
   "Each result is { email, action, verdict, reason, checks }. action is send | hold | kill: send means go ahead, hold means send only with a fallback in hand (catch-all, forwarder, greylisted or refused probe), kill means never send (no mail server, or the mailbox does not exist). checks.smtp is skipped on the free DNS tier; the hosted tier probes the mailbox.";
 
+// Tool annotations: every hint spelled out on every tool, the way the hosts and
+// the directories want them. The verify tools and balance only read (a hosted
+// check spends a credit, the way a search API spends a call); signup and
+// buy_credits create something on the server, and all five talk to the world.
+const LOOKUP = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } as const;
+const CREATES = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } as const;
+
 function text(obj: object): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }], structuredContent: obj as Record<string, unknown> };
 }
@@ -49,6 +56,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
       title: "Verify one email address",
       description: `Check whether an email address can receive mail before sending to it. ${VERDICT_DOC} Uses the hosted SMTP probe (1 credit) when an API key is configured and hosted is not false; otherwise the free local DNS tier.`,
       inputSchema: { email: z.string().describe("The address to check"), hosted: z.boolean().optional().describe("Probe the mailbox on the hosted tier (default: yes when a key is configured)") },
+      annotations: LOOKUP,
     },
     async ({ email, hosted }) => {
       try {
@@ -68,6 +76,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
       title: "Verify a list of email addresses",
       description: `Check up to 500 addresses in one call. ${VERDICT_DOC} DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each.`,
       inputSchema: { emails: z.array(z.string()).min(1).max(500).describe("The addresses to check"), hosted: z.boolean().optional().describe("Probe mailboxes on the hosted tier (default: yes when a key is configured)") },
+      annotations: LOOKUP,
     },
     async ({ emails, hosted }) => {
       try {
@@ -87,6 +96,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
       title: "Create an MX Probe API key",
       description: "Sign up with an email address. Returns an API key with 100 free checks and saves it locally for the other tools. The key is also mailed to the address. One key per address.",
       inputSchema: { email: z.string().describe("The operator's email address, where the key is mailed") },
+      annotations: CREATES,
     },
     async ({ email }) => {
       try {
@@ -100,7 +110,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
     },
   );
 
-  server.registerTool("balance", { title: "Credits left", description: "How many hosted checks are left on the configured API key.", inputSchema: {} }, async () => {
+  server.registerTool("balance", { title: "Credits left", description: "How many hosted checks are left on the configured API key.", inputSchema: {}, annotations: LOOKUP }, async () => {
     try {
       return text(await state().client.balance());
     } catch (err) {
@@ -114,6 +124,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
       title: "Buy credits",
       description: "Get a Stripe Checkout link for more hosted checks: 9 USD per 10,000, one payment, credits never expire. Open the link to pay; credits land on the key when Stripe confirms.",
       inputSchema: { packs: z.number().int().min(1).max(100).optional().describe("How many packs of 10,000 (default 1)") },
+      annotations: CREATES,
     },
     async ({ packs }) => {
       try {

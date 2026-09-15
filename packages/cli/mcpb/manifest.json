@@ -60,6 +60,12 @@
         "required": [
           "email"
         ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
       }
     },
     {
@@ -85,6 +91,12 @@
         "required": [
           "emails"
         ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
       }
     },
     {
@@ -101,6 +113,12 @@
         "required": [
           "email"
         ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
       }
     },
     {
@@ -109,6 +127,12 @@
       "inputSchema": {
         "type": "object",
         "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
       }
     },
     {
@@ -124,6 +148,12 @@
             "description": "How many packs of 10,000 (default 1)"
           }
         }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
       }
     }
   ],

@@ -1,12 +1,15 @@
 // The MCP server over an in-memory transport: the tool list and the calls.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { buildMcpServer } from "../src/mcp.ts";
 import { configPath, readConfig } from "../src/config.ts";
 import { fakeFetch, freshEnv, hostedResult, resolver, type Canned } from "./helpers.ts";
+
+const HINTS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"] as const;
 
 async function connect(env: NodeJS.ProcessEnv, canned: Canned = {}) {
   const f = fakeFetch(canned);
@@ -41,7 +44,10 @@ test("mcp: five tools, verify_email returns the verdict contract", async () => {
       tools.map((x) => x.name).sort(),
       ["balance", "buy_credits", "signup", "verify_batch", "verify_email"],
     );
-    for (const tool of tools) assert.ok(tool.description && tool.description.length > 40, `${tool.name} is documented`);
+    for (const tool of tools) {
+      assert.ok(tool.description && tool.description.length > 40, `${tool.name} is documented`);
+      for (const hint of HINTS) assert.equal(typeof tool.annotations?.[hint], "boolean", `${tool.name} declares ${hint}`);
+    }
     const v = await t.call("verify_email", { email: "junk" });
     assert.equal(v.json["action"], "kill");
     assert.equal(v.json["hosted"], false, "no key configured, so the free tier");
@@ -51,6 +57,26 @@ test("mcp: five tools, verify_email returns the verdict contract", async () => {
     assert.equal(bal.json["status"], 401);
     assert.equal(bal.json["error"], "no_api_key");
     assert.equal(t.calls.length, 0, "nothing went to the network");
+  } finally {
+    await t.close();
+  }
+});
+
+test("mcp: the mcpb manifest carries the same tools and annotations as the server", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../mcpb/manifest.json", import.meta.url), "utf8")) as {
+    tools: { name: string; annotations: Record<string, boolean> }[];
+  };
+  const t = await connect(freshEnv());
+  try {
+    const { tools } = await t.client.listTools();
+    assert.deepEqual(
+      manifest.tools.map((x) => x.name).sort(),
+      tools.map((x) => x.name).sort(),
+    );
+    for (const tool of tools) {
+      const listed = manifest.tools.find((x) => x.name === tool.name);
+      assert.deepEqual(listed?.annotations, tool.annotations, `${tool.name} annotations match`);
+    }
   } finally {
     await t.close();
   }
