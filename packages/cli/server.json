@@ -3,7 +3,7 @@
   "name": "dev.mxprobe/mxprobe",
   "title": "MX Probe",
   "description": "Email verification for AI agents: send, hold or kill with the reason. Signup and credits by API.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "websiteUrl": "https://mxprobe.dev",
   "repository": {
     "url": "https://github.com/andrewchmr/mxprobe",
@@ -15,7 +15,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mxprobe",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "runtimeHint": "npx",
       "transport": { "type": "stdio" },
       "packageArguments": [

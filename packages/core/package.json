@@ -1,6 +1,6 @@
 {
   "name": "mxprobe-core",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "The MX Probe engine: DNS tier, SMTP probe and the send / hold / kill verdict contract. Zero dependencies.",
   "license": "MIT",
   "type": "module",
