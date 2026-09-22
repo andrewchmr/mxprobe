@@ -162,5 +162,26 @@ URL-encoded JSON for VS Code, of
 `{"command":"npx","args":["-y","mxprobe","mcp"]}`. Rebuild them only if the
 command changes.
 
+Submitted 2026-09-22:
+
+- Cline MCP Marketplace: issue cline/mcp-marketplace#2609 (repo URL, the 400x400
+  logo, the two test checkboxes). Their agent installs from `llms-install.md`
+  in the repo root, which is why that file exists.
+- mcpservers.org: the free form (category Marketing, contact
+  hello@mxprobe.dev, registry name `dev.mxprobe/mxprobe`). "Review within 2
+  weeks". That site is also how the wong2 list takes entries: it accepts no PRs.
+- LobeHub: `packages/cli/lhm.plugin.json` is the manifest, made by `npx -y
+  @lobehub/market-cli plugin init --stdio "npx -y mxprobe mcp" --dir
+  packages/cli` and then edited (display name, icon). Publish with `lhm login`,
+  `lhm github connect` (both need a browser) and `lhm plugin publish
+  https://github.com/andrewchmr/mxprobe --dir packages/cli`. Its `version`
+  field is a publish-time field: bump it only for a new LobeHub release.
+- Cursor Directory (cursor.directory/plugins/new) needs a GitHub or Google
+  sign-in first.
+
+Dead end: `appcypher/awesome-mcp-servers` is archived (2026-08-01) and takes no
+PRs. `modelcontextprotocol/servers` retired its third-party list in favour of
+the MCP Registry, where we already are.
+
 GitHub topics set on the repo:
 `email-verification`, `email-validation`, `mcp-server`, `ai-agents`, `smtp`.

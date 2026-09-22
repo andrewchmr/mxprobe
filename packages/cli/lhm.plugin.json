@@ -1,0 +1,165 @@
+{
+  "author": "andrewchmr",
+  "authorUrl": "https://github.com/andrewchmr",
+  "description": "Email verification for AI agents. One call returns send, hold or kill with the reason. Free DNS tier runs locally; the hosted SMTP probe is 9 USD per 10,000 checks. CLI + MCP server.",
+  "homepage": "https://mxprobe.dev",
+  "icon": "https://raw.githubusercontent.com/andrewchmr/mxprobe/main/site/icon-400.png",
+  "identifier": "andrewchmr-mxprobe",
+  "name": "MX Probe",
+  "prompts": [],
+  "resources": [],
+  "tags": [
+    "email",
+    "verification",
+    "email-verifier",
+    "mx",
+    "smtp",
+    "bounce",
+    "ai-agent",
+    "mcp",
+    "mcp-server",
+    "outreach"
+  ],
+  "tools": [
+    {
+      "name": "verify_email",
+      "title": "Verify one email address",
+      "description": "Check whether an email address can receive mail before sending to it. Each result is { email, action, verdict, reason, checks }. action is send | hold | kill: send means go ahead, hold means send only with a fallback in hand (catch-all, forwarder, greylisted or refused probe), kill means never send (no mail server, or the mailbox does not exist). checks.smtp is skipped on the free DNS tier; the hosted tier probes the mailbox. Uses the hosted SMTP probe (1 credit) when an API key is configured and hosted is not false; otherwise the free local DNS tier.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to check"
+          },
+          "hosted": {
+            "description": "Probe the mailbox on the hosted tier (default: yes when a key is configured)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "verify_batch",
+      "title": "Verify a list of email addresses",
+      "description": "Check up to 500 addresses in one call. Each result is { email, action, verdict, reason, checks }. action is send | hold | kill: send means go ahead, hold means send only with a fallback in hand (catch-all, forwarder, greylisted or refused probe), kill means never send (no mail server, or the mailbox does not exist). checks.smtp is skipped on the free DNS tier; the hosted tier probes the mailbox. DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "emails": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The addresses to check"
+          },
+          "hosted": {
+            "description": "Probe mailboxes on the hosted tier (default: yes when a key is configured)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "emails"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "signup",
+      "title": "Create an MX Probe API key",
+      "description": "Sign up with an email address. Returns an API key with 100 free checks and saves it locally for the other tools. The key is also mailed to the address. One key per address.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The operator's email address, where the key is mailed"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "balance",
+      "title": "Credits left",
+      "description": "How many hosted checks are left on the configured API key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "buy_credits",
+      "title": "Buy credits",
+      "description": "Get a Stripe Checkout link for more hosted checks: 9 USD per 10,000, one payment, credits never expire. Open the link to pay; credits land on the key when Stripe confirms.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "packs": {
+            "description": "How many packs of 10,000 (default 1)",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "version": "0.2.5"
+}
