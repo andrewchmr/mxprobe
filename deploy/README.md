@@ -189,6 +189,12 @@ Submitted 2026-09-22:
   `{"mcpServers":{"mxprobe":{"command":"npx","args":["-y","mxprobe","mcp"]}}}`,
   with `site/icon-400.png` as the logo.
 
+`.mcp.json` at the repo root holds that same stdio config. It is what the Open
+Plugins scanners read, and it gives anyone who opens this checkout in an MCP
+client the server. It names the *published* package (`npx -y mxprobe mcp`), not
+the local build, so to test a change in the working tree run
+`node packages/cli/dist/bin.js mcp` instead.
+
 Dead end: `appcypher/awesome-mcp-servers` is archived (2026-08-01) and takes no
 PRs. `modelcontextprotocol/servers` retired its third-party list in favour of
 the MCP Registry, where we already are.

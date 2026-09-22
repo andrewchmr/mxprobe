@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mxprobe": {
+      "command": "npx",
+      "args": ["-y", "mxprobe", "mcp"]
+    }
+  }
+}
