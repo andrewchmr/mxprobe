@@ -14,6 +14,10 @@ npx mxprobe check --hosted hello@example.com # survivors go to the hosted SMTP p
 claude mcp add mxprobe -- npx -y mxprobe mcp # the MCP server
 ```
 
+One click: [Cursor](https://cursor.com/install-mcp?name=mxprobe&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm14cHJvYmUiLCJtY3AiXX0%3D) · [VS Code](https://vscode.dev/redirect/mcp/install?name=mxprobe&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22mxprobe%22%2C%22mcp%22%5D%7D) ·
+[LM Studio](https://lmstudio.ai/install-mcp?name=mxprobe&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm14cHJvYmUiLCJtY3AiXX0%3D). In Claude Code the same server also comes as a plugin:
+`/plugin marketplace add andrewchmr/mxprobe`, then `/plugin install mxprobe@mxprobe`.
+
 ```json
 {
   "email": "hello@example.com",

@@ -1,0 +1,18 @@
+<!-- The source of site/icon-400.png, the square logo the directories ask for
+  (Cline wants 400x400 PNG). Render with headless Chromium:
+  chrome --headless --no-sandbox --hide-scrollbars --force-device-scale-factor=1 --window-size=400,400 --screenshot=site/icon-400.png file://$PWD/deploy/icon.html -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin:0; width:400px; height:400px; overflow:hidden; }
+  body { background:#0c0c0c; display:flex; align-items:center; justify-content:center; }
+  .ring { width:250px; height:250px; border-radius:50%; border:16px solid #2b2b2b; display:flex; align-items:center; justify-content:center; }
+  .dot { width:140px; height:140px; border-radius:50%; background:#22c55e; }
+</style>
+</head>
+<body>
+<div class="ring"><span class="dot"></span></div>
+</body>
+</html>

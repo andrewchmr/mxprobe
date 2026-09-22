@@ -1,0 +1,19 @@
+{
+  "name": "mxprobe",
+  "displayName": "MX Probe",
+  "description": "Email verification for AI agents: send, hold or kill with the reason. The free DNS tier runs locally; a key sends the survivors to the hosted SMTP probe.",
+  "author": {
+    "name": "andrewchmr",
+    "url": "https://mxprobe.dev"
+  },
+  "homepage": "https://mxprobe.dev",
+  "repository": "https://github.com/andrewchmr/mxprobe",
+  "license": "MIT",
+  "keywords": ["email", "verification", "email-verifier", "mx", "smtp", "bounce", "outreach"],
+  "mcpServers": {
+    "mxprobe": {
+      "command": "npx",
+      "args": ["-y", "mxprobe", "mcp"]
+    }
+  }
+}

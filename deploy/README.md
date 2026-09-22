@@ -138,5 +138,29 @@ by URL there): `deploy/mcpb.sh <version>` builds it from the npm package and
 the GitHub repo on its own (https://glama.ai/mcp/servers/andrewchmr/mxprobe);
 PulseMCP imports from the official registry; mcp.so only has a paid listing.
 
+The `awesome-mcp-servers` PR (punkpeye/awesome-mcp-servers#14309, Communication
+section, with the Glama score badge the bot asks for) was MERGED 2026-09-15.
+The lists of wong2 and appcypher do not carry MX Probe yet.
+
+Claude Code plugin: `.claude-plugin/marketplace.json` names this repo as a
+marketplace and `plugins/mxprobe/.claude-plugin/plugin.json` wires the MCP
+server (`npx -y mxprobe mcp`). A user installs it with `/plugin marketplace add
+andrewchmr/mxprobe`, then `/plugin install mxprobe@mxprobe`. Neither file
+carries a `version`: Claude Code falls back to the git tag, which keeps the
+plugin out of the version-bump list. `claude plugin validate ./plugins/mxprobe`
+checks the manifest (it warns about the missing version; that is the choice
+above). Test the marketplace itself with `claude plugin marketplace add ./`,
+then `claude plugin marketplace remove mxprobe`.
+
+`site/icon-400.png` is the square logo the directories ask for (Cline wants
+400x400 PNG); `deploy/icon.html` is its source and holds the Chromium command,
+like `og.html`.
+
+One-click install links in both READMEs (Cursor, VS Code, LM Studio) carry the
+same stdio config in the query string: base64 for Cursor and LM Studio,
+URL-encoded JSON for VS Code, of
+`{"command":"npx","args":["-y","mxprobe","mcp"]}`. Rebuild them only if the
+command changes.
+
 GitHub topics set on the repo:
 `email-verification`, `email-validation`, `mcp-server`, `ai-agents`, `smtp`.
