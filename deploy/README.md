@@ -176,8 +176,18 @@ Submitted 2026-09-22:
   `lhm github connect` (both need a browser) and `lhm plugin publish
   https://github.com/andrewchmr/mxprobe --dir packages/cli`. Its `version`
   field is a publish-time field: bump it only for a new LobeHub release.
-- Cursor Directory (cursor.directory/plugins/new) needs a GitHub or Google
-  sign-in first.
+- LobeHub: DONE. `lhm plugin publish` made `andrewchmr-mxprobe@0.2.5`, then
+  `lhm plugin update` merged the manifest into that version. The listing is
+  claimed; the public page stays 404 until their crawler finishes.
+- Cursor Directory: DONE, https://cursor.directory/plugins/mx-probe, pending
+  their security scan. Their "Auto (GitHub)" scan found nothing, because the
+  Open Plugins standard wants `rules/*.mdc`, `.mcp.json`, `skills/*/SKILL.md`,
+  `agents/*.md`, `commands/*.md` or `hooks/hooks.json` at the repo ROOT; our
+  plugin lives in `.claude-plugin/` and `plugins/mxprobe/`. A root `.mcp.json`
+  would make that scan work. The listing went in through the Manual tab: one
+  component, type MCP Server, content
+  `{"mcpServers":{"mxprobe":{"command":"npx","args":["-y","mxprobe","mcp"]}}}`,
+  with `site/icon-400.png` as the logo.
 
 Dead end: `appcypher/awesome-mcp-servers` is archived (2026-08-01) and takes no
 PRs. `modelcontextprotocol/servers` retired its third-party list in favour of
