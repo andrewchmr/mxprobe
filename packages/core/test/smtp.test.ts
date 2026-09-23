@@ -49,6 +49,23 @@ test("probeMailbox: every no-such-mailbox phrasing kills, an unrelated 5xx does 
   assert.equal(result.smtp, "refused");
 });
 
+test("probeMailbox: a disabled mailbox is DEAD, a 5.2.1 rate limit is not", async () => {
+  const disabled = [
+    "550-5.2.1 The email account that you tried to reach is inactive. For more\r\n550 5.2.1 information, go to https://support.google.com/mail/?p=DisabledUser\r\n",
+    "550-5.2.1 The email account that you tried to reach is\r\n550 5.2.1 disabled. Learn more at https://support.google.com/mail/?p=DisabledUser\r\n",
+    "550 5.2.1 Mailbox disabled, not accepting messages\r\n",
+  ];
+  for (const reply of disabled) {
+    const { result } = await probe({ rcpt: () => reply });
+    assert.equal(result.verdict, "DEAD", reply);
+    assert.equal(result.smtp, "rejected", reply);
+    assert.match(result.reason, /says the mailbox is disabled \(550/, reply);
+  }
+  const busy = await probe({ rcpt: () => "550-5.2.1 The user you are trying to contact is receiving mail at a rate that\r\n550 5.2.1 prevents additional messages from being delivered.\r\n" });
+  assert.equal(busy.result.verdict, "WEAK");
+  assert.equal(busy.result.smtp, "refused");
+});
+
 test("probeMailbox: a catch-all server is WEAK with catchAll true", async () => {
   const { result } = await probe("catchall", "anyone@good.test");
   assert.deepEqual(result, { verdict: "WEAK", reason: "good.test is catch-all: mx1.good.test accepts any local part, so the mailbox cannot be proven", smtp: "accepted", catchAll: true });

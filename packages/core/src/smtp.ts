@@ -12,6 +12,14 @@ import { errorCode, errorMessage, withTimeout } from "./util.ts";
 const NO_SUCH_MAILBOX =
   /5\.1\.[0136]\b|5\.4\.1\b|user unknown|unknown user|does not exist|doesn't exist|no such (user|recipient|mailbox)|not found|not exist|no mailbox|invalid recipient|recipient rejected|recipient address rejected|unrouteable|unknown recipient|not our customer|mailbox unavailable|address rejected|invalid mailbox|unknown address/i;
 
+// Reply text that means "this mailbox exists but is switched off" (RFC 3463
+// X.2.1, Google's "550-5.2.1 The email account that you tried to reach is
+// inactive/disabled"). It bounces like a missing mailbox, so it kills too. The
+// status code alone is not enough: Google also sends 5.2.1 for a mailbox that
+// is receiving mail too fast, which says nothing about whether it exists.
+const DISABLED_MAILBOX =
+  /\b5\.2\.1\b.{0,200}?\b(inactive|disabled)\b|(mailbox|account) (is )?(disabled|inactive|suspended)|disabled (mailbox|account)/i;
+
 /** Connect errors that mean the network blocks port 25, not that one MX is down. */
 export const PORT_BLOCKED: ReadonlySet<string> = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"]);
 
@@ -155,6 +163,8 @@ export async function probeMailbox(email: string, domain: string, mxHost: string
         c.code === 250 || c.code === 251
           ? { verdict: "WEAK", reason: `${domain} is catch-all: ${mxHost} accepts any local part, so the mailbox cannot be proven`, smtp: "accepted", catchAll: true }
           : { verdict: "OK", reason: `mailbox accepted by ${mxHost}`, smtp: "accepted", catchAll: false };
+    } else if (r.code >= 500 && DISABLED_MAILBOX.test(r.text)) {
+      result = { verdict: "DEAD", reason: `${mxHost} says the mailbox is disabled (${firstLine(r)})`, smtp: "rejected", catchAll: null };
     } else if (r.code >= 500 && NO_SUCH_MAILBOX.test(r.text)) {
       result = { verdict: "DEAD", reason: `${mxHost} says the mailbox does not exist (${firstLine(r)})`, smtp: "rejected", catchAll: null };
     } else if (r.code >= 500) {
