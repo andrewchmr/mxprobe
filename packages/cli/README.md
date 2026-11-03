@@ -13,6 +13,11 @@ npx mxprobe buy                                       # a Stripe link: 9 USD per
 npx mxprobe mcp                                       # the MCP server on stdio
 ```
 
+`--smtp` probes the mailbox from your own machine instead. It needs outbound
+port 25, which most laptops and clouds block. The probe says EHLO with this
+machine's host name and `MAIL FROM:<>`, so it names no domain; `--helo` (best:
+the reverse DNS name of your IP) and `--from` change them.
+
 ## MCP
 
 ```bash
@@ -38,7 +43,7 @@ environment.
   "action": "send",
   "verdict": "OK",
   "reason": "mailbox accepted by aspmx.l.google.com",
-  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "smtp": "accepted", "catch_all": false }
+  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "provider": "google_workspace", "smtp": "accepted", "catch_all": false }
 }
 ```
 

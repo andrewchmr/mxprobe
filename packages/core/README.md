@@ -10,12 +10,15 @@ The MX Probe engine. Zero dependencies, Node 20+. Two tiers:
    the address and for a random local part (the catch-all test), QUIT. No
    message is ever sent. Needs outbound port 25, which most laptops and
    clouds block; the hosted API at https://api.mxprobe.dev runs it for you.
+   By default the probe says EHLO with this machine's host name and
+   `MAIL FROM:<>` (the null sender), so it names no domain. Set `helo` (best:
+   the reverse DNS name of the probing IP) and `from` to change them.
 
 ```js
 import { verify, verifyBatch, createVerifier } from "mxprobe-core";
 
 await verify("hello@example.com");
-// { email, action: "send" | "hold" | "kill", verdict: "OK" | "WEAK" | "DEAD", reason, checks: { syntax, mx, smtp, catch_all } }
+// { email, action: "send" | "hold" | "kill", verdict: "OK" | "WEAK" | "DEAD", reason, checks: { syntax, mx, provider, smtp, catch_all } }
 
 await verifyBatch(["a@b.com", "c@d.org"], { smtp: true, helo: "probe.example.com", from: "probe@example.com" });
 
@@ -25,6 +28,16 @@ const v = createVerifier({ smtp: true, smtpConcurrency: 3, autoDisableSmtp: fals
 `checks.smtp` is `skipped` on the DNS tier, else `accepted`, `rejected`,
 `refused`, `deferred`, `unreachable` or `dropped`. Only `rejected` (a 5xx that
 names the mailbox) kills; everything else that is not `accepted` holds.
+
+`checks.provider` names who runs the mail server, from the MX host name:
+`gmail`, `google_workspace`, `microsoft_365`, `outlook`, `yahoo`, `mailru`, a
+security gateway such as `proofpoint`, and more; `null` when the name is not
+a known one. It is information only and never changes the verdict.
+`mailProvider(mx, domain)` gives the same answer.
+
+In a batch, each domain is looked up once, the catch-all test runs once per
+domain, and an MX host that times out is not asked again, so a tarpit costs
+one timeout per batch.
 
 Options (all optional): `smtp`, `helo`, `from`, `port`, `hostOverride`,
 `dnsTimeoutMs`, `smtpTimeoutMs`, `smtpConcurrency`, `dnsConcurrency`,

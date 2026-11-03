@@ -9,7 +9,7 @@
 //      test), then QUITs. No message is ever sent. Needs outbound port 25.
 //
 // The verdict contract, the same in the CLI, the MCP server and the API:
-//   { email, action, verdict, reason, checks: { syntax, mx, smtp, catch_all } }
+//   { email, action, verdict, reason, checks: { syntax, mx, provider, smtp, catch_all } }
 //   action  = send | hold | kill
 //   verdict = OK   | WEAK | DEAD
 //   `hold` never becomes `kill` on a refusal, a greylist or a catch-all. Only
@@ -23,6 +23,7 @@ export const VERSION: string = (createRequire(import.meta.url)("../package.json"
 export { parseAddress, type AddressError, type ParsedAddress, type ParseResult } from "./address.ts";
 export { checkDomain, labelWebHost, type DomainCheck, type MxHost } from "./dns.ts";
 export { DEFAULTS, resolveOptions, type ResolvedOptions, type VerifierOptions } from "./options.ts";
+export { mailProvider } from "./provider.ts";
 export { probeMailbox, PORT_BLOCKED, type ProbeOptions, type ProbeResult, type ProbeSmtp } from "./smtp.ts";
 export { ACTIONS, VERDICTS, createVerifier, summarize, verify, verifyBatch, type Verifier, type VerifierState } from "./verifier.ts";
 export { errorMessage } from "./util.ts";

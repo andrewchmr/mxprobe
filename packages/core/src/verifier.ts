@@ -1,8 +1,9 @@
 // The driver: syntax, then the DNS tier, then (with `smtp`) the probe, with
 // shared concurrency limits and the "port 25 is blocked" switch.
 import { parseAddress } from "./address.ts";
-import { checkDomain, type MxHost } from "./dns.ts";
+import { checkDomain, type DomainCheck, type MxHost } from "./dns.ts";
 import { resolveOptions, type ResolvedOptions, type VerifierOptions } from "./options.ts";
+import { mailProvider } from "./provider.ts";
 import { PORT_BLOCKED, probeMailbox, type ProbeResult } from "./smtp.ts";
 import type { Action, Checks, Summary, Verdict, VerifyResult } from "./types.ts";
 import { errorMessage } from "./util.ts";
@@ -40,14 +41,28 @@ function makeSemaphore(n: number): Limiter {
 }
 
 function result(email: string, verdict: Verdict, reason: string, checks: Partial<Checks>): VerifyResult {
+  const mx = checks.mx ?? null;
+  const provider = mx === null ? null : mailProvider(mx, email.slice(email.lastIndexOf("@") + 1));
   return {
     email,
     action: ACTIONS[verdict],
     verdict,
     reason,
-    checks: { syntax: true, mx: null, smtp: "skipped", catch_all: null, ...checks },
+    checks: { syntax: true, mx, provider, smtp: "skipped", catch_all: null, ...checks },
   };
 }
+
+// What one batch learns as it goes, so that it asks each domain and each MX
+// host only once: the DNS tier per domain (the promise, so a lookup in flight
+// is shared too), the catch-all answer per domain, and the MX hosts that
+// timed out. A tarpit then costs one timeout per batch, not one per address.
+interface Batch {
+  domains: Map<string, Promise<DomainCheck>>;
+  catchAll: Map<string, boolean>;
+  slowMx: Set<string>;
+}
+
+const newBatch = (): Batch => ({ domains: new Map(), catchAll: new Map(), slowMx: new Set() });
 
 export interface VerifierState {
   /** True once a probe proved that port 25 is blocked (with autoDisableSmtp). */
@@ -62,11 +77,18 @@ export interface Verifier {
   readonly options: ResolvedOptions;
 }
 
-// Try the primary MX, then the secondary when the primary cannot be reached at all.
-async function probeWithFallback(email: string, domain: string, mxHosts: readonly MxHost[], o: ResolvedOptions): Promise<ProbeResult> {
+// Try the primary MX, then the secondary when the primary cannot be reached at
+// all. An MX host that timed out earlier in the batch is not asked again.
+async function probeWithFallback(email: string, domain: string, mxHosts: readonly MxHost[], o: ResolvedOptions, batch: Batch): Promise<ProbeResult> {
   let last: ProbeResult | null = null;
   for (const { host, ip } of mxHosts) {
-    const probe = await probeMailbox(email, domain, host, { ...o, connectHost: ip ?? host });
+    if (batch.slowMx.has(host)) {
+      last = { verdict: "WEAK", reason: `${host} timed out earlier in this batch, so it was not asked again`, smtp: "unreachable", catchAll: null };
+      continue;
+    }
+    const probe = await probeMailbox(email, domain, host, { ...o, connectHost: ip ?? host, catchAll: batch.catchAll.get(domain) });
+    if (probe.timedOut) batch.slowMx.add(host);
+    if (probe.catchAll !== null) batch.catchAll.set(domain, probe.catchAll);
     if (probe.smtp !== "unreachable") return probe;
     last = probe;
     if (probe.connectError !== undefined && PORT_BLOCKED.has(probe.connectError)) return probe;
@@ -84,12 +106,21 @@ export function createVerifier(opts: VerifierOptions = {}): Verifier {
   const dnsLimit = makeSemaphore(o.dnsConcurrency);
   const smtpLimit = makeSemaphore(o.smtpConcurrency);
 
-  async function verify(raw: string): Promise<VerifyResult> {
+  function lookup(domain: string, batch: Batch): Promise<DomainCheck> {
+    let check = batch.domains.get(domain);
+    if (check === undefined) {
+      check = dnsLimit(() => checkDomain(domain, o));
+      batch.domains.set(domain, check);
+    }
+    return check;
+  }
+
+  async function verifyOne(raw: string, batch: Batch): Promise<VerifyResult> {
     const parsed = parseAddress(raw);
     if (parsed.error !== undefined) return result(parsed.email, "DEAD", parsed.error, { syntax: false });
     const { email, domain } = parsed;
     try {
-      const d = await dnsLimit(() => checkDomain(domain, o));
+      const d = await lookup(domain, batch);
       if (d.verdict === "DEAD") return result(email, "DEAD", d.reason, { mx: null });
 
       if (!o.smtp) {
@@ -100,7 +131,7 @@ export function createVerifier(opts: VerifierOptions = {}): Verifier {
         return result(email, d.verdict, `${d.reason}; SMTP tier off for this run (${state.smtpDownWhy})`, { mx: d.mx, smtp: "unreachable" });
       }
 
-      const probe = await smtpLimit(() => probeWithFallback(email, domain, d.mxHosts, o));
+      const probe = await smtpLimit(() => probeWithFallback(email, domain, d.mxHosts, o, batch));
       if (probe.connectError !== undefined && o.autoDisableSmtp && PORT_BLOCKED.has(probe.connectError)) {
         state.smtpDown = true;
         state.smtpDownWhy = `${probe.connectError} on ${d.mx}:${o.port}`;
@@ -115,10 +146,11 @@ export function createVerifier(opts: VerifierOptions = {}): Verifier {
   }
 
   function verifyBatch(emails: readonly string[]): Promise<VerifyResult[]> {
-    return Promise.all(emails.map((e) => verify(e)));
+    const batch = newBatch();
+    return Promise.all(emails.map((e) => verifyOne(e, batch)));
   }
 
-  return { verify, verifyBatch, state, options: o };
+  return { verify: (email) => verifyOne(email, newBatch()), verifyBatch, state, options: o };
 }
 
 /** One-shot helpers. Each call gets its own limits. */

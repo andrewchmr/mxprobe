@@ -1,5 +1,5 @@
 // The verdict contract, the same in the CLI, the MCP server and the API:
-//   { email, action, verdict, reason, checks: { syntax, mx, smtp, catch_all } }
+//   { email, action, verdict, reason, checks: { syntax, mx, provider, smtp, catch_all } }
 //   action  = send | hold | kill
 //   verdict = OK   | WEAK | DEAD
 //   `hold` never becomes `kill` on a refusal, a greylist or a catch-all. Only
@@ -14,6 +14,8 @@ export type SmtpCheck = "skipped" | "accepted" | "rejected" | "refused" | "defer
 export interface Checks {
   syntax: boolean;
   mx: string | null;
+  /** Who runs the mail server, from the MX host name (gmail, microsoft_365, ...). null when unknown. Never moves the verdict. */
+  provider: string | null;
   smtp: SmtpCheck;
   catch_all: boolean | null;
 }

@@ -252,6 +252,7 @@
                       "checks": {
                         "syntax": true,
                         "mx": "aspmx.l.google.com",
+                        "provider": "google_workspace",
                         "smtp": "accepted",
                         "catch_all": false
                       }
@@ -264,6 +265,7 @@
                       "checks": {
                         "syntax": true,
                         "mx": null,
+                        "provider": null,
                         "smtp": "skipped",
                         "catch_all": null
                       }
@@ -541,6 +543,7 @@
         "required": [
           "syntax",
           "mx",
+          "provider",
           "smtp",
           "catch_all"
         ],
@@ -554,6 +557,13 @@
               "null"
             ],
             "description": "The mail exchanger asked, or null when the domain has none"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who runs the mail server, read from the MX host name: gmail, google_workspace, microsoft_365, outlook, yahoo, icloud, mailru, yandex, zoho, proton, fastmail, privateemail, godaddy, or a security gateway (proofpoint, mimecast, barracuda, cisco). null when the name is not a known one. Information only: it never changes the verdict."
           },
           "smtp": {
             "$ref": "#/components/schemas/SmtpCheck"

@@ -19,6 +19,8 @@ Usage
 
 Options
   --smtp        run the SMTP probe locally too (needs outbound port 25; most laptops and clouds block it)
+  --helo NAME   the EHLO name of the local probe (default: this machine's host name; best: the reverse DNS name of your IP)
+  --from ADDR   the MAIL FROM of the local probe (default: the null sender <>)
   --api-url     hosted API base (default https://api.mxprobe.dev)
 
 Key: MXPROBE_API_KEY in the environment, else ${configPath()}
@@ -49,6 +51,8 @@ export async function main(argv: readonly string[], { stdout = process.stdout, s
       smtp: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       file: { type: "string" },
+      helo: { type: "string" },
+      from: { type: "string" },
       packs: { type: "string", default: "1" },
       "api-url": { type: "string" },
       help: { type: "boolean", short: "h", default: false },
@@ -85,7 +89,10 @@ export async function main(argv: readonly string[], { stdout = process.stdout, s
           stderr.write("usage: mxprobe check [--hosted] [--json] <email>... | --file <list>\n");
           return 2;
         }
-        const out = await checkEmails(emails, { hosted: values.hosted, client, smtp: values.smtp, verifierOptions });
+        const probe: VerifierOptions = { ...verifierOptions };
+        if (values.helo !== undefined) probe.helo = values.helo;
+        if (values.from !== undefined) probe.from = values.from.replace(/^<(.*)>$/, "$1"); // "<>" and "" are the null sender
+        const out = await checkEmails(emails, { hosted: values.hosted, client, smtp: values.smtp, verifierOptions: probe });
         if (values.json) {
           stdout.write(JSON.stringify(out, null, 2) + "\n");
         } else {

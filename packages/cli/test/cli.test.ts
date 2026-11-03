@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
+import net from "node:net";
 import { join } from "node:path";
+import { DEFAULTS } from "mxprobe-core";
 import { main } from "../src/cli.ts";
 import { readConfig } from "../src/config.ts";
 import { capture, fakeFetch, freshEnv, hostedResult, resolver, type Canned } from "./helpers.ts";
@@ -131,4 +133,45 @@ test("cli: an API error prints status and message; a 402 adds the checkout hint"
 test("cli: errors that are not API errors propagate", async () => {
   const env = freshEnv();
   await assert.rejects(main(["check", "--file", join(env["HOME"] ?? "", "missing.txt")], { ...capture(), env }), /ENOENT/);
+});
+
+// A mail server that says 250 to everything and records each line.
+async function recordingSmtp(): Promise<{ port: number; lines: string[]; close(): void }> {
+  const lines: string[] = [];
+  const server = net.createServer((sock) => {
+    sock.write("220 fake\r\n");
+    let buf = "";
+    sock.on("data", (chunk: Buffer) => {
+      buf += chunk.toString("utf8");
+      let idx: number;
+      while ((idx = buf.indexOf("\r\n")) !== -1) {
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        lines.push(line);
+        sock.write(line.startsWith("QUIT") ? "221 bye\r\n" : "250 ok\r\n");
+      }
+    });
+  });
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  return { port: addr.port, lines, close: () => server.close() };
+}
+
+test("cli: --helo and --from set the identity of the local probe; --from '<>' is the null sender", async () => {
+  const smtp = await recordingSmtp();
+  const probe = (flags: string[]) =>
+    main(["check", "--smtp", ...flags, "a@good.test"], { ...capture(), env: freshEnv(), verifierOptions: { resolver, hostOverride: "127.0.0.1", port: smtp.port, smtpTimeoutMs: 2000 } });
+  try {
+    await probe([]);
+    assert.deepEqual(smtp.lines.slice(0, 2), [`EHLO ${DEFAULTS.helo}`, "MAIL FROM:<>"], "by default: this machine's name and the null sender");
+    smtp.lines.length = 0;
+    await probe(["--helo", "probe.example.test", "--from", "ops@example.test"]);
+    assert.deepEqual(smtp.lines.slice(0, 2), ["EHLO probe.example.test", "MAIL FROM:<ops@example.test>"]);
+    smtp.lines.length = 0;
+    await probe(["--from", "<>"]);
+    assert.equal(smtp.lines[1], "MAIL FROM:<>");
+  } finally {
+    smtp.close();
+  }
 });

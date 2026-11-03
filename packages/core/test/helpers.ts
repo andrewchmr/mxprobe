@@ -61,6 +61,8 @@ export interface FakeSmtpOptions {
   ehlo?: string;
   helo?: string;
   mailFrom?: string;
+  /** The reply to RSET. */
+  rset?: string;
   /** Called with the address inside <>; returns the reply line. */
   rcpt?: (addr: string) => string;
   /** Close the socket right after this command instead of answering. */
@@ -73,6 +75,8 @@ export interface FakeSmtp {
   commands: string[];
   /** The most sessions in dialogue at once. A session ends at QUIT or when its socket closes, whichever comes first. */
   maxActive: number;
+  /** Every connection accepted, across all sessions. */
+  connections: number;
   /** Resolves once the listening socket is closed. */
   close(): Promise<void>;
 }
@@ -96,8 +100,9 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
   const ehlo = o.ehlo ?? MULTILINE_EHLO;
   const helo = o.helo ?? "250 mx1.good.test\r\n";
   const mailFrom = o.mailFrom ?? "250 2.1.0 OK\r\n";
+  const rset = o.rset ?? "250 2.0.0 OK\r\n";
   const rcpt = o.rcpt ?? ((addr: string) => (addr === "alice@good.test" ? OK_RCPT : NO_USER));
-  const state = { commands: [] as string[], active: 0, maxActive: 0 };
+  const state = { commands: [] as string[], active: 0, maxActive: 0, connections: 0 };
 
   const server = net.createServer((sock) => {
     // Count the dialogue, not the TCP connection: the client releases its
@@ -109,6 +114,7 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
       open = false;
       state.active--;
     };
+    state.connections++;
     state.active++;
     state.maxActive = Math.max(state.maxActive, state.active);
     sock.on("close", release);
@@ -130,6 +136,7 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
         else if (cmd.startsWith("HELO")) sock.write(helo);
         else if (verb === "MAIL FROM") sock.write(mailFrom);
         else if (verb === "RCPT TO") sock.write(rcpt(line.match(/<([^>]+)>/)?.[1] ?? ""));
+        else if (cmd.startsWith("RSET")) sock.write(rset);
         else if (cmd.startsWith("QUIT")) {
           release();
           sock.end("221 bye\r\n");
@@ -147,6 +154,9 @@ export function fakeSmtp(opts: FakeSmtpOptions | keyof typeof modes = {}): Promi
         commands: state.commands,
         get maxActive() {
           return state.maxActive;
+        },
+        get connections() {
+          return state.connections;
         },
         close: () => new Promise<void>((done) => server.close(() => done())),
       });

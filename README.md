@@ -24,7 +24,7 @@ One click: [Cursor](https://cursor.com/install-mcp?name=mxprobe&config=eyJjb21tY
   "action": "send",
   "verdict": "OK",
   "reason": "mailbox accepted by aspmx.l.google.com",
-  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "smtp": "accepted", "catch_all": false }
+  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "provider": "google_workspace", "smtp": "accepted", "catch_all": false }
 }
 ```
 

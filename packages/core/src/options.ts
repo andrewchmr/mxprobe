@@ -1,4 +1,5 @@
 import { promises as dnsPromises } from "node:dns";
+import { hostname } from "node:os";
 import type { Resolver } from "./types.ts";
 
 export interface VerifierOptions {
@@ -8,9 +9,9 @@ export interface VerifierOptions {
   smtpTimeoutMs?: number;
   smtpConcurrency?: number;
   dnsConcurrency?: number;
-  /** The name given in EHLO. Its reverse DNS should match the probing IP. */
+  /** The name given in EHLO. Best: the reverse DNS name of the probing IP. Default: this machine's host name. */
   helo?: string;
-  /** The MAIL FROM address. */
+  /** The MAIL FROM address. Default "": the null sender, MAIL FROM:<>, which names no domain. */
   from?: string;
   port?: number;
   /** Connect here instead of the MX host, for tests against a local server. */
@@ -27,14 +28,17 @@ export interface VerifierOptions {
 
 export type ResolvedOptions = Required<VerifierOptions>;
 
+// The probe names this machine, not mxprobe.dev: the SPF record of
+// probe.mxprobe.dev allows only the hosted API's IP, so from any other IP that
+// HELO fails the check. The hosted API sets its own helo and from.
 export const DEFAULTS: Readonly<ResolvedOptions> = Object.freeze({
   smtp: false,
   dnsTimeoutMs: 8000,
   smtpTimeoutMs: 12000,
   smtpConcurrency: 3,
   dnsConcurrency: 20,
-  helo: "probe.mxprobe.dev",
-  from: "probe@mxprobe.dev",
+  helo: hostname() || "localhost",
+  from: "",
   port: 25,
   hostOverride: null,
   autoDisableSmtp: true,

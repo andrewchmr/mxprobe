@@ -33,10 +33,10 @@ export const canned = (email: string, verdict: Verdict = "OK", extra: Partial<Ve
   action: ACTIONS[verdict],
   verdict,
   reason: `canned ${verdict}`,
-  checks: { syntax: true, mx: "mx.good.test", smtp: "accepted", catch_all: false, ...extra },
+  checks: { syntax: true, mx: "mx.good.test", provider: null, smtp: "accepted", catch_all: false, ...extra },
 });
 
-const syntaxKill = (email: string, error: string): VerifyResult => ({ email, action: "kill", verdict: "DEAD", reason: error, checks: { syntax: false, mx: null, smtp: "skipped", catch_all: null } });
+const syntaxKill = (email: string, error: string): VerifyResult => ({ email, action: "kill", verdict: "DEAD", reason: error, checks: { syntax: false, mx: null, provider: null, smtp: "skipped", catch_all: null } });
 
 /** Syntax kills are real; every other address gets its canned verdict, default OK. */
 export const fakeVerifier = (map: Record<string, VerifyResult> = {}): Pick<Verifier, "verifyBatch"> => ({

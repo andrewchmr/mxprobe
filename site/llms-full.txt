@@ -19,7 +19,7 @@ Every result, from the API, the CLI and the MCP server, has the same shape:
   "action": "send",
   "verdict": "OK",
   "reason": "mailbox accepted by aspmx.l.google.com",
-  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "smtp": "accepted", "catch_all": false }
+  "checks": { "syntax": true, "mx": "aspmx.l.google.com", "provider": "google_workspace", "smtp": "accepted", "catch_all": false }
 }
 
 action:
@@ -32,6 +32,7 @@ verdict: OK, WEAK or DEAD. It mirrors action (send, hold, kill) for callers that
 checks:
 - syntax: whether the address parses.
 - mx: the mail exchanger that was asked, or null when the domain has none.
+- provider: who runs the mail server, read from the MX host name: gmail, google_workspace, microsoft_365, outlook, yahoo, icloud, mailru, yandex, zoho, proton, fastmail, privateemail, godaddy, or a security gateway (proofpoint, mimecast, barracuda, cisco). null when the name is not a known one. Information only: it never changes the verdict.
 - smtp: skipped (the DNS tier already decided, or the free tier), accepted, rejected, refused, deferred, unreachable (refunded), dropped.
 - catch_all: whether the domain accepts any mailbox; null when not tested.
 
@@ -70,6 +71,8 @@ npx mxprobe check --hosted hello@example.com          # DNS kills stay local; su
 npx mxprobe balance
 npx mxprobe buy                                       # a Stripe link: 9 USD per 10,000, credits never expire
 npx mxprobe mcp                                       # the MCP server on stdio
+
+--smtp probes the mailbox from your own machine instead. It needs outbound port 25, which most laptops and clouds block. The probe says EHLO with this machine's host name and MAIL FROM:<>, so it names no domain; --helo (best: the reverse DNS name of your IP) and --from change them.
 
 Node 20 or newer. Set MXPROBE_API_KEY to use a key from the environment.
 

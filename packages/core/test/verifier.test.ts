@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACTIONS, DEFAULTS, VERDICTS, createVerifier, resolveOptions, summarize, verify, verifyBatch, type Resolver } from "../src/index.ts";
-import { closedPort, fakeResolver, fakeSmtp, OK_RCPT, TABLE } from "./helpers.ts";
+import { hostname } from "node:os";
+import { ACTIONS, DEFAULTS, VERDICTS, createVerifier, mailProvider, resolveOptions, summarize, verify, verifyBatch, type Resolver } from "../src/index.ts";
+import { closedPort, fakeResolver, fakeSmtp, NO_USER, OK_RCPT, TABLE } from "./helpers.ts";
 
 const resolver = fakeResolver(TABLE);
 
@@ -21,7 +22,7 @@ test("verify without SMTP: a forwarder is hold and a DNS-dead domain is kill", a
   assert.doesNotMatch(fwd.reason, /not probed/);
   const dead = await verify("x@nomx.test", { resolver });
   assert.equal(dead.action, "kill");
-  assert.deepEqual(dead.checks, { syntax: true, mx: null, smtp: "skipped", catch_all: null });
+  assert.deepEqual(dead.checks, { syntax: true, mx: null, provider: null, smtp: "skipped", catch_all: null });
 });
 
 test("verify: bad syntax is kill with syntax false", async () => {
@@ -31,7 +32,7 @@ test("verify: bad syntax is kill with syntax false", async () => {
     action: "kill",
     verdict: "DEAD",
     reason: "not an email address",
-    checks: { syntax: false, mx: null, smtp: "skipped", catch_all: null },
+    checks: { syntax: false, mx: null, provider: null, smtp: "skipped", catch_all: null },
   });
 });
 
@@ -176,7 +177,7 @@ test("every result has the full checks shape", async () => {
   const rs = await verifyBatch(["a@good.test", "junk", "x@nomx.test"], { resolver });
   for (const r of rs) {
     assert.deepEqual(Object.keys(r), ["email", "action", "verdict", "reason", "checks"]);
-    assert.deepEqual(Object.keys(r.checks), ["syntax", "mx", "smtp", "catch_all"]);
+    assert.deepEqual(Object.keys(r.checks), ["syntax", "mx", "provider", "smtp", "catch_all"]);
     assert.equal(r.action, ACTIONS[r.verdict]);
   }
 });
@@ -190,4 +191,111 @@ test("resolveOptions: defaults under the caller's options, undefined keeps the d
   assert.equal(o.helo, "h.test");
   assert.equal(o.resolver, DEFAULTS.resolver);
   assert.equal(createVerifier({ dnsConcurrency: 7 }).options.dnsConcurrency, 7);
+});
+
+test("defaults: the local probe names this machine in EHLO and sends the null sender", async () => {
+  assert.equal(DEFAULTS.helo, hostname() || "localhost");
+  assert.equal(DEFAULTS.from, "");
+  const smtp = await fakeSmtp("accept");
+  try {
+    await verify("alice@good.test", { resolver, smtp: true, port: smtp.port });
+    assert.equal(smtp.commands[0], `EHLO ${DEFAULTS.helo}`);
+    assert.equal(smtp.commands[1], "MAIL FROM:<>");
+  } finally {
+    smtp.close();
+  }
+});
+
+test("mailProvider: named from the MX host; Google's MX is Gmail only for the Gmail domains", () => {
+  const cases: Array<[string, string, string | null]> = [
+    ["gmail-smtp-in.l.google.com", "gmail.com", "gmail"],
+    ["gmail-smtp-in.l.google.com", "GoogleMail.com", "gmail"],
+    ["aspmx.l.google.com", "acme.com", "google_workspace"],
+    ["smtp.google.com", "acme.com", "google_workspace"],
+    ["aspmx2.googlemail.com", "acme.com", "google_workspace"],
+    ["acme-com.mail.protection.outlook.com", "acme.com", "microsoft_365"],
+    ["acme-com.o-v1.mx.microsoft", "acme.com", "microsoft_365"],
+    ["outlook-com.olc.protection.outlook.com", "outlook.com", "outlook"],
+    ["mta6.am0.yahoodns.net", "yahoo.com", "yahoo"],
+    ["mx01.mail.icloud.com", "icloud.com", "icloud"],
+    ["mxs.mail.ru", "mail.ru", "mailru"],
+    ["mx.yandex.net", "acme.ru", "yandex"],
+    ["mx.zoho.eu", "acme.eu", "zoho"],
+    ["mail.protonmail.ch", "proton.me", "proton"],
+    ["in1-smtp.messagingengine.com", "fastmail.com", "fastmail"],
+    ["mx1.privateemail.com", "acme.com", "privateemail"],
+    ["smtp.secureserver.net", "acme.com", "godaddy"],
+    ["mx0a-001b2d01.pphosted.com", "acme.com", "proofpoint"],
+    ["mx1-us1.ppe-hosted.com", "acme.com", "proofpoint"],
+    ["us-smtp-inbound-1.mimecast.com", "acme.com", "mimecast"],
+    ["d123456a.ess.barracudanetworks.com", "acme.com", "barracuda"],
+    ["mx1.hc1234-56.iphmx.com", "acme.com", "cisco"],
+    ["mail.acme.com", "acme.com", null],
+    ["mx.notgoogle.com", "acme.com", null],
+  ];
+  for (const [mx, domain, want] of cases) assert.equal(mailProvider(mx, domain), want, `${mx} for ${domain}`);
+});
+
+test("verify: checks.provider comes from the primary MX, on the DNS tier too", async () => {
+  const r = fakeResolver({ "acme.test": { mx: [{ exchange: "ASPMX.L.GOOGLE.COM.", priority: 1 }] }, "aspmx.l.google.com": { a: ["192.0.2.25"] } });
+  const v = await verify("x@acme.test", { resolver: r });
+  assert.equal(v.checks.mx, "aspmx.l.google.com");
+  assert.equal(v.checks.provider, "google_workspace");
+  assert.equal((await verify("a@good.test", { resolver })).checks.provider, null, "an MX that is not a known provider");
+});
+
+test("verifyBatch: one DNS lookup per domain; verify() calls share nothing", async () => {
+  const lookups: string[] = [];
+  const counting: Resolver = { ...resolver, resolveMx: (d) => (lookups.push(d), resolver.resolveMx(d)) };
+  const v = createVerifier({ resolver: counting });
+  const rs = await v.verifyBatch(["a@good.test", "b@good.test", "c@GOOD.test", "x@nomx.test", "y@nomx.test"]);
+  assert.deepEqual(rs.map((r) => r.action), ["send", "send", "send", "kill", "kill"]);
+  assert.deepEqual(lookups.sort(), ["good.test", "nomx.test"]);
+  lookups.length = 0;
+  await v.verify("a@good.test");
+  await v.verify("b@good.test");
+  assert.deepEqual(lookups, ["good.test", "good.test"]);
+});
+
+test("verifyBatch: the catch-all test runs once per domain", async () => {
+  const real = new Set(["a@good.test", "b@good.test", "c@good.test"]);
+  const smtp = await fakeSmtp({ rcpt: (addr) => (real.has(addr) ? OK_RCPT : NO_USER) });
+  try {
+    const v = createVerifier({ resolver, smtp: true, port: smtp.port, smtpConcurrency: 1 });
+    const rs = await v.verifyBatch([...real]);
+    assert.ok(rs.every((r) => r.action === "send" && r.checks.catch_all === false));
+    assert.equal(smtp.commands.filter((c) => /-probe@good\.test>$/.test(c)).length, 1);
+  } finally {
+    smtp.close();
+  }
+  const all = await fakeSmtp("catchall");
+  try {
+    const v = createVerifier({ resolver, smtp: true, port: all.port, smtpConcurrency: 1 });
+    const rs = await v.verifyBatch(["a@good.test", "b@good.test"]);
+    assert.ok(rs.every((r) => r.action === "hold" && r.checks.catch_all === true));
+    assert.equal(all.commands.filter((c) => /-probe@good\.test>$/.test(c)).length, 1);
+  } finally {
+    all.close();
+  }
+});
+
+test("verifyBatch: an MX that times out is not asked again in the same batch", async () => {
+  const slowTable = fakeResolver({ "slow.test": { mx: [{ exchange: "mx.slow.test", priority: 10 }] }, "mx.slow.test": { a: ["127.0.0.1"] } });
+  const smtp = await fakeSmtp({ banner: null });
+  try {
+    const v = createVerifier({ resolver: slowTable, smtp: true, port: smtp.port, smtpTimeoutMs: 300, smtpConcurrency: 1 });
+    const rs = await v.verifyBatch(["a@slow.test", "b@slow.test", "c@slow.test"]);
+    assert.deepEqual(rs.map((r) => r.action), ["hold", "hold", "hold"]);
+    assert.equal(rs[0]?.checks.smtp, "dropped");
+    assert.match(rs[0]?.reason ?? "", /ETIMEDOUT/);
+    for (const r of rs.slice(1)) {
+      assert.equal(r.checks.smtp, "unreachable");
+      assert.equal(r.reason, "mx.slow.test timed out earlier in this batch, so it was not asked again");
+    }
+    assert.equal(smtp.connections, 1);
+    await v.verifyBatch(["d@slow.test"]);
+    assert.equal(smtp.connections, 2, "the next batch asks again");
+  } finally {
+    smtp.close();
+  }
 });

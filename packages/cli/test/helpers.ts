@@ -74,5 +74,5 @@ export const hostedResult = (email: string, verdict: "OK" | "WEAK" | "DEAD" = "O
   action: ACTIONS[verdict],
   verdict,
   reason: `hosted says ${verdict}`,
-  checks: { syntax: true, mx: "mx.good.test", smtp: verdict === "DEAD" ? "rejected" : "accepted", catch_all: verdict === "WEAK" ? true : verdict === "OK" ? false : null },
+  checks: { syntax: true, mx: "mx.good.test", provider: null, smtp: verdict === "DEAD" ? "rejected" : "accepted", catch_all: verdict === "WEAK" ? true : verdict === "OK" ? false : null },
 });

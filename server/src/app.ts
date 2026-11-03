@@ -375,7 +375,7 @@ export function createApp({ db, verifier, notifier, config, fetchImpl = fetch, l
           "GET /v1/balance": "-> {email, credits, checks_total}. Bearer key.",
           "POST /v1/credits/checkout": '{"packs": 1} -> {url}. Bearer key. Pay at the URL; credits land on confirmation.',
         },
-        verdict: { action: ["send", "hold", "kill"], verdict: ["OK", "WEAK", "DEAD"], checks: ["syntax", "mx", "smtp", "catch_all"] },
+        verdict: { action: ["send", "hold", "kill"], verdict: ["OK", "WEAK", "DEAD"], checks: ["syntax", "mx", "provider", "smtp", "catch_all"] },
         privacy: "Addresses are logged for 24 hours for debugging, then deleted. They never leave the server except to the mail exchanger being asked.",
       },
     ];

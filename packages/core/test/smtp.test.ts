@@ -119,6 +119,7 @@ test("probeMailbox: a server that hangs up mid-session is dropped, not DEAD", as
   assert.equal(result.verdict, "WEAK");
   assert.equal(result.smtp, "dropped");
   assert.match(result.reason, /dropped the session \(ECLOSED\)/);
+  assert.equal(result.timedOut, undefined, "a hang-up is not a timeout");
 });
 
 test("probeMailbox: a server that never sends a banner times out as dropped", async () => {
@@ -126,6 +127,31 @@ test("probeMailbox: a server that never sends a banner times out as dropped", as
   const { result } = await probe({ banner: null }, "alice@good.test", { smtpTimeoutMs: 400 });
   assert.equal(result.smtp, "dropped");
   assert.match(result.reason, /ETIMEDOUT/);
+  assert.equal(result.timedOut, true);
+});
+
+test("probeMailbox: with the null sender the catch-all test runs in a transaction of its own", async () => {
+  const { result, commands } = await probe("accept", "alice@good.test", { from: "" });
+  assert.deepEqual(result, { verdict: "OK", reason: "mailbox accepted by mx1.good.test", smtp: "accepted", catchAll: false });
+  assert.deepEqual(
+    commands.map((c) => c.replace(/<[0-9a-f]{12}-probe@/, "<random@")),
+    ["EHLO probe.test", "MAIL FROM:<>", "RCPT TO:<alice@good.test>", "RSET", "MAIL FROM:<>", "RCPT TO:<random@good.test>", "QUIT"],
+  );
+});
+
+test("probeMailbox: a refused RSET leaves the catch-all question open, so an accepted mailbox holds", async () => {
+  const { result } = await probe({ rset: "502 5.5.1 not implemented\r\n" }, "alice@good.test", { from: "" });
+  assert.deepEqual(result, { verdict: "WEAK", reason: "mailbox accepted by mx1.good.test, but the catch-all test could not run", smtp: "accepted", catchAll: null });
+});
+
+test("probeMailbox: a known catch-all answer skips the random RCPT TO", async () => {
+  const known = await probe("accept", "alice@good.test", { catchAll: false });
+  assert.equal(known.result.verdict, "OK");
+  assert.equal(known.commands.filter((c) => c.startsWith("RCPT")).length, 1);
+  const all = await probe("catchall", "anyone@good.test", { catchAll: true });
+  assert.equal(all.result.catchAll, true);
+  assert.equal(all.result.verdict, "WEAK");
+  assert.equal(all.commands.filter((c) => c.startsWith("RCPT")).length, 1);
 });
 
 test("probeMailbox: a closed port is unreachable with the connect error code", async () => {
