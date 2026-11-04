@@ -4,7 +4,7 @@
     "title": "MX Probe API",
     "version": "0.2.7",
     "summary": "Email verification for AI agents",
-    "description": "One call returns `send`, `hold` or `kill` for an email address, with the reason. Signup and credits happen by API too, so an agent can provision itself.\n\n`action` is `send`, `hold` or `kill`; `verdict` is `OK`, `WEAK` or `DEAD`. A `hold` never becomes a `kill` on a refusal, a greylist or a catch-all. Only a 5xx that names the mailbox kills.\n\n100 checks free at signup, then 9 USD per 10,000, one payment, credits never expire. Addresses are logged for 24 hours for debugging, then deleted. The probe never sends a message.",
+    "description": "One call returns `send`, `hold` or `kill` for an email address, with the reason. Signup and credits happen by API too, so an agent can provision itself.\n\n`action` is `send`, `hold` or `kill`; `verdict` is `OK`, `WEAK` or `DEAD`. A `hold` never becomes a `kill` on a refusal, a greylist or a catch-all. Only a 5xx that names the mailbox kills.\n\n100 checks free at signup (once per IP address and company domain), then 9 USD per 10,000, one payment, credits never expire. A 402 carries `checkout_url`, the key's payment link. Addresses are logged for 24 hours for debugging, then deleted. The probe never sends a message.",
     "termsOfService": "https://mxprobe.dev/",
     "contact": {
       "name": "MX Probe",
@@ -115,7 +115,7 @@
         ],
         "operationId": "signup",
         "summary": "Create an API key",
-        "description": "One key per address. The key is returned once and also mailed. 100 free checks are on it. Limited to 3 signups a day per IP and 10 requests an hour per IP.",
+        "description": "One key per address. The key is returned once and also mailed. 100 free checks are on it, once per IP address (30 days) and once per company domain; a repeat key works but starts at 0 credits, and its `checkout_url` is where a person pays. Limited to 3 signups a day per IP and 10 requests an hour per IP.",
         "requestBody": {
           "required": true,
           "content": {
@@ -152,7 +152,8 @@
                   "email": "you@company.com",
                   "credits": 100,
                   "mailed": true,
-                  "message": "Keep this key; it is shown once and was mailed to you. Send it as Authorization: Bearer <key>. 100 free checks are on it."
+                  "message": "Keep this key; it is shown once and was mailed to you. Send it as Authorization: Bearer <key>. 100 free checks are on it.",
+                  "checkout_url": "https://api.mxprobe.dev/v1/buy/7-3f9a0c4e1b2d5a6f7c8e9d0a"
                 }
               }
             }
@@ -290,7 +291,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "402": {
-            "description": "`insufficient_credits`. `checkout_hint` says how to buy more.",
+            "description": "`insufficient_credits`. Nothing was charged. `checkout_url` is the key's payment link: show it to the person who runs the agent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -301,7 +302,8 @@
                   "message": "This call needs 2 credits and the key has 0.",
                   "credits_left": 0,
                   "needed": 2,
-                  "checkout_hint": "POST https://api.mxprobe.dev/v1/credits/checkout returns a payment link: 9 USD per 10,000 checks, credits never expire."
+                  "checkout_url": "https://api.mxprobe.dev/v1/buy/7-3f9a0c4e1b2d5a6f7c8e9d0a",
+                  "checkout_hint": "A person pays at checkout_url (show it to your operator): 9 USD per 10,000 checks, credits never expire. POST https://api.mxprobe.dev/v1/credits/checkout returns a fresh Stripe link too."
                 }
               }
             }
@@ -352,7 +354,8 @@
                   "email": "you@company.com",
                   "credits": 98,
                   "checks_total": 2,
-                  "created_at": "2026-09-12T17:00:00.000Z"
+                  "created_at": "2026-09-12T17:00:00.000Z",
+                  "buy_url": "https://api.mxprobe.dev/v1/buy/7-3f9a0c4e1b2d5a6f7c8e9d0a"
                 }
               }
             }
@@ -438,6 +441,58 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/buy/{token}": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "operationId": "buy",
+        "summary": "A key's own payment link",
+        "description": "No auth: the token is in `checkout_url` (402, signup) and `buy_url` (balance). Redirects to a fresh Stripe Checkout for that key; the link never expires and never shows the key. 10 requests an hour per IP.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "packs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Redirect to Stripe Checkout (`Location` header; the body is `{url}`)"
+          },
+          "403": {
+            "$ref": "#/components/responses/Revoked"
+          },
+          "404": {
+            "description": "`unknown_link`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           }
         }
       }
@@ -681,6 +736,11 @@
           },
           "message": {
             "type": "string"
+          },
+          "checkout_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The key's payment link (GET /v1/buy/{token}); it never expires"
           }
         }
       },
@@ -705,6 +765,11 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "buy_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The key's payment link (GET /v1/buy/{token}); it never expires"
           }
         }
       },
@@ -770,6 +835,11 @@
           },
           "max": {
             "type": "integer"
+          },
+          "checkout_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "On 402: the key's payment link, for a person to open"
           }
         }
       }

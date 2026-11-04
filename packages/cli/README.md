@@ -2,7 +2,7 @@
 
 Email verification for AI agents. One call returns `send`, `hold` or `kill`
 with the reason. The DNS tier is free and runs on your machine; the hosted
-SMTP probe is 9 USD per 10,000 checks, 100 free at signup.
+SMTP probe is 9 USD per 10,000 checks, 100 free at signup (once per IP address and company domain).
 
 ```bash
 npx mxprobe check hello@example.com ops@example.org   # free, local, no key

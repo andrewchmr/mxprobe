@@ -111,11 +111,11 @@ npx mxprobe check --hosted hello@example.com   # survivors go to the hosted mail
   <h2>Get a key by API</h2>
 <pre><code>curl -X POST https://api.mxprobe.dev/v1/signup \
   -H "Content-Type: application/json" -d '{"email":"you@company.com"}'</code></pre>
-  <p>The key comes back in the response and by mail, with 100 free checks on it. <code>GET /v1/balance</code> reads the credits. <code>POST /v1/credits/checkout</code> returns a payment link. <a href="https://api.mxprobe.dev/">The API describes itself</a>.</p>
+  <p>The key comes back in the response and by mail, with 100 free checks on it (once per IP address and company domain). <code>GET /v1/balance</code> reads the credits and the key's own payment link. A <code>402</code> carries the same link as <code>checkout_url</code>, so the agent can hand it to you. <a href="https://api.mxprobe.dev/">The API describes itself</a>.</p>
 
   <h2>Price</h2>
   <p class="price">9 USD per 10,000 checks</p>
-  <p>One payment, no subscription, credits never expire. 100 checks free at signup. A DNS kill from the CLI costs nothing; only the hosted mailbox probe uses credits.</p>
+  <p>One payment, no subscription, credits never expire. 100 checks free at signup, once per IP address and company domain. When a key drops below 20 checks, its owner gets one mail with the payment link. A DNS kill from the CLI costs nothing; only the hosted mailbox probe uses credits.</p>
 
   <h2 id="story">Why this exists</h2>
   <p>An outreach agent of mine sent a few thousand cold emails, and hundreds bounced. Some bounces arrived days later, after the mail had already been counted as delivered. Those addresses were on domains that cannot receive mail at all, which a one-second check catches before you send. The rest were mailboxes that no longer exist, which only asking the mail server reveals. Run over the same list afterwards, this checker would have stopped about half of the bounces, and it cleared every address that had actually been delivered.</p>
@@ -129,7 +129,7 @@ npx mxprobe check --hosted hello@example.com   # survivors go to the hosted mail
   <p class="note" id="feedback-note"></p>
 
   <footer>
-    <p>Privacy: addresses you send are logged for 24 hours for debugging, then deleted. They never leave the server except to the mail exchanger being asked. The probe never sends a message.</p>
+    <p>Privacy: addresses you send are logged for 24 hours for debugging, then deleted. The API access log keeps the IP address, user agent and path of each request for 30 days, never a request body. They never leave the server except to the mail exchanger being asked. The probe never sends a message.</p>
     <p>MIT-licensed engine and CLI on <a href="https://github.com/andrewchmr/mxprobe">GitHub</a>. Built by <a href="https://x.com/andrewchmr">@andrewchmr</a>.</p>
   </footer>
 </main>

@@ -20,6 +20,7 @@ test("checkEmails: DNS kills stay local, survivors go to the hosted probe", asyn
   );
   assert.equal(out.hosted, 1);
   assert.equal(out.credits_left, 42);
+  assert.equal(out.out_of_credits, null);
   assert.deepEqual(out.summary, { send: 0, hold: 0, kill: 3, total: 3 });
 });
 
@@ -68,6 +69,29 @@ test("checkEmails: survivors go up in chunks of 100, the last credits_left wins,
   );
   assert.equal(out.results[7]?.reason.includes("not probed"), true, "u7 kept its DNS-tier verdict");
   assert.equal(out.results[8]?.action, "hold");
+});
+
+test("checkEmails: a 402 mid-run keeps the paid chunks and marks the rest not probed", async () => {
+  const emails = Array.from({ length: 150 }, (_, i) => `u${i}@good.test`);
+  let credits = 100;
+  const client = verifyOnly(async (chunk): Promise<VerifyResponse> => {
+    if (chunk.length > credits) throw new ApiError(402, { error: "insufficient_credits", message: `This call needs ${chunk.length} credits and the key has ${credits}.`, credits_left: credits, needed: chunk.length, checkout_url: "https://api.test/v1/buy/1-ab" });
+    credits -= chunk.length;
+    return { results: chunk.map((e) => hostedResult(e, "OK")), summary: { send: chunk.length, hold: 0, kill: 0, total: chunk.length }, credits_used: chunk.length, credits_left: credits };
+  });
+  const out = await checkEmails(emails, { hosted: true, client, verifierOptions: { resolver } });
+  assert.equal(out.results.length, 150, "every address has a result");
+  assert.equal(out.hosted, 100, "the 100 paid checks are kept");
+  assert.equal(out.results[0]?.reason, "hosted says OK");
+  assert.match(out.results[120]?.reason ?? "", /; mailbox not probed: no credits left$/);
+  assert.doesNotMatch(out.results[120]?.reason ?? "", /not probed; mailbox not probed/);
+  assert.equal(out.credits_left, 0);
+  assert.deepEqual(out.out_of_credits, { message: "This call needs 50 credits and the key has 0.", needed: 50, credits_left: 0, checkout_url: "https://api.test/v1/buy/1-ab", not_probed: 50 });
+
+  const other = verifyOnly(async () => {
+    throw new ApiError(500, { error: "internal", message: "boom" });
+  });
+  await assert.rejects(checkEmails(["a@good.test"], { hosted: true, client: other, verifierOptions: { resolver } }), /boom/, "other API errors still throw");
 });
 
 test("createClient: bearer header, JSON errors become ApiError, no key is 401 before any request", async () => {

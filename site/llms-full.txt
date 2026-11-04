@@ -50,7 +50,7 @@ POST /v1/signup {"email"} -> 201 {api_key, email, credits: 100, mailed, message}
 
 POST /v1/verify {"emails": ["a@b.com", ...]} (max 100) or {"email": "a@b.com"} -> 200 {results: [VerifyResult], summary: {send, hold, kill, total}, credits_used, credits_left}
   Bearer. One credit per syntactically valid address; duplicates collapse; a check whose mail server could not be reached is refunded. 60 checks a minute per key.
-  Errors: 400 no_emails, too_many_emails (max: 100), invalid_emails; 401 missing_api_key or invalid_api_key; 402 insufficient_credits with credits_left, needed and checkout_hint; 403 key_revoked; 413 body_too_large (64 KB); 429 rate_limited with retry_after_seconds and a Retry-After header.
+  Errors: 400 no_emails, too_many_emails (max: 100), invalid_emails; 401 missing_api_key or invalid_api_key; 402 insufficient_credits with credits_left, needed, checkout_url (the key's payment link: show it to your operator) and checkout_hint; 403 key_revoked; 413 body_too_large (64 KB); 429 rate_limited with retry_after_seconds and a Retry-After header.
 
 GET /v1/balance -> 200 {email, credits, checks_total, created_at}
   Bearer.
@@ -59,9 +59,12 @@ POST /v1/credits/checkout {"packs": 1} -> 200 {url, credits, amount_usd, packs, 
   Bearer. 9 USD per pack of 10,000, up to 100 packs. Open the URL to pay; credits land on the key when Stripe confirms, and a confirmation is mailed.
   Errors: 503 payments_not_configured.
 
+GET /v1/buy/{token}[?packs=N] -> 303 to a fresh Stripe Checkout for that key
+  No auth. The key's own payment link: checkout_url in a 402 and in the signup reply, buy_url in GET /v1/balance. It never expires and never shows the key.
+
 GET /v1/health -> {ok, version, uptime_s, notifier, payments}
 
-An agent's full loop: POST /v1/signup with the operator's address, keep api_key, POST /v1/verify before every send, on 402 POST /v1/credits/checkout and hand the URL to the operator.
+An agent's full loop: POST /v1/signup with the operator's address, keep api_key, POST /v1/verify before every send, on 402 hand checkout_url to the operator (a person pays; the credits land on the key). The CLI and MCP server keep every result on a 402: the addresses not probed keep their DNS-tier verdict and out_of_credits carries the link.
 
 ## CLI
 
@@ -85,7 +88,7 @@ Any client: {"mcpServers":{"mxprobe":{"command":"npx","args":["-y","mxprobe","mc
 Tools:
 - verify_email {email, hosted?}: one address. Hosted probe when a key is configured and hosted is not false; otherwise the free DNS tier.
 - verify_batch {emails (1 to 500), hosted?}: a list. DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each.
-- signup {email}: creates a key with 100 free checks, saves it locally for the other tools, and mails it.
+- signup {email}: creates a key with 100 free checks (once per IP address and company domain; a repeat key starts at 0 with a checkout_url), saves it locally for the other tools, and mails it.
 - balance {}: credits left on the configured key.
 - buy_credits {packs?}: a Stripe Checkout link, 9 USD per 10,000.
 

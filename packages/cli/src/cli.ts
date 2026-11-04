@@ -26,6 +26,9 @@ Options
 Key: MXPROBE_API_KEY in the environment, else ${configPath()}
 Docs: https://mxprobe.dev`;
 
+/** Where a person pays: the key's own link, else the command that makes one. */
+const buyLine = (url: string | null): string => (url ? `Buy 10,000 checks for 9 USD here: ${url}` : "Run `npx mxprobe buy` for a payment link: 9 USD per 10,000 checks.");
+
 /** Anything with a write(string): process.stdout, or a buffer in tests. */
 export interface Sink {
   write(chunk: string): unknown;
@@ -41,7 +44,7 @@ export interface CliIo {
   verifierOptions?: VerifierOptions;
 }
 
-/** Exit codes: 0 ok, 1 a kill (single address) or an API error, 2 usage. */
+/** Exit codes: 0 ok, 1 a kill (single address), an API error or a run that ran out of credits, 2 usage. */
 export async function main(argv: readonly string[], { stdout = process.stdout, stderr = process.stderr, env = process.env, fetchImpl, verifierOptions }: CliIo = {}): Promise<number> {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -104,6 +107,11 @@ export async function main(argv: readonly string[], { stdout = process.stdout, s
           else if (!values.smtp) stderr.write(`. DNS tier only: a send means the domain takes mail, not that the mailbox exists. Add --hosted to probe the mailbox.`);
           stderr.write("\n");
         }
+        if (out.out_of_credits) {
+          const o = out.out_of_credits;
+          stderr.write(`\nOut of credits: ${o.not_probed} ${o.not_probed === 1 ? "address was not probed and keeps its" : "addresses were not probed and keep their"} DNS-tier verdict. ${o.message}\n${buyLine(o.checkout_url)}\n`);
+          return 1;
+        }
         return out.summary.kill > 0 && emails.length === 1 ? 1 : 0;
       }
       case "signup": {
@@ -115,11 +123,12 @@ export async function main(argv: readonly string[], { stdout = process.stdout, s
         const res = await client.signup(email);
         const path = writeConfig({ api_key: res.api_key, api_url: cfg.apiUrl, email: res.email }, env);
         stdout.write(`Key saved to ${path}. ${res.credits} free checks on it. The key was also mailed to ${res.email}.\n`);
+        if (res.credits === 0) stdout.write(`${res.message.match(/No free checks: [^.]*\./)?.[0] ?? "No free checks on this key."} ${buyLine(res.checkout_url ?? null)}\n`);
         return 0;
       }
       case "balance": {
         const res = await client.balance();
-        stdout.write(values.json ? JSON.stringify(res) + "\n" : `${res.credits} credits left on the key for ${res.email} (${res.checks_total} checks so far)\n`);
+        stdout.write(values.json ? JSON.stringify(res) + "\n" : `${res.credits} credits left on the key for ${res.email} (${res.checks_total} checks so far)\n${res.buy_url ? `Payment link for this key: ${res.buy_url}\n` : ""}`);
         return 0;
       }
       case "buy": {
@@ -140,7 +149,7 @@ export async function main(argv: readonly string[], { stdout = process.stdout, s
   } catch (err) {
     if (err instanceof ApiError) {
       stderr.write(`${err.status}: ${err.message}\n`);
-      if (err.status === 402 && err.body.checkout_hint) stderr.write(`${err.body.checkout_hint}\n`);
+      if (err.status === 402) stderr.write(`${buyLine(err.body.checkout_url ?? null)}\n`);
       return 1;
     }
     throw err;

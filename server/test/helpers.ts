@@ -5,7 +5,7 @@ import http from "node:http";
 import { ACTIONS, parseAddress, type Resolver, type Verdict, type Verifier, type VerifyResult } from "mxprobe-core";
 import { openDb, type Db } from "../src/db.ts";
 import { createApp, type AppConfig, type AppDeps } from "../src/app.ts";
-import type { Mail, Notifier } from "../src/notify.ts";
+import type { Mail, Notifier, Template } from "../src/notify.ts";
 import type { FetchLike, FetchResponseLike, Logger } from "../src/types.ts";
 
 const nx = (code: string): NodeJS.ErrnoException => Object.assign(new Error(code), { code });
@@ -48,16 +48,17 @@ export const fakeVerifier = (map: Record<string, VerifyResult> = {}): Pick<Verif
 });
 
 export interface FakeNotifier extends Notifier {
-  sent: { emails: Mail[]; telegrams: string[] };
+  sent: { emails: Mail[]; telegrams: string[]; templates: Template[] };
 }
 
 export function fakeNotifier(): FakeNotifier {
-  const sent = { emails: [] as Mail[], telegrams: [] as string[] };
+  const sent = { emails: [] as Mail[], telegrams: [] as string[], templates: [] as Template[] };
   return {
-    configured: { telegram: true, email: true },
+    configured: { telegram: true, email: true, templates: true },
     sent,
     email: async (m) => (sent.emails.push(m), true),
     telegram: async (t) => (sent.telegrams.push(t), true),
+    template: async (t) => (sent.templates.push(t), true),
   };
 }
 
@@ -120,7 +121,8 @@ export async function boot(config: Partial<AppConfig> = {}, deps: BootDeps = {})
     fetchImpl: stripe.fetchImpl,
     log: quiet,
     now: deps.now,
-    config: { resolver, signupsPerDayPerIp: 10, stripeSecretKey: "sk_test_x", stripePriceId: "price_x", stripeWebhookSecret: "whsec_test", ...config },
+    // Every test signs up from 127.0.0.1 on good.test: the free-credit rules are off unless a test turns them on.
+    config: { resolver, signupsPerDayPerIp: 10, freeKeyIpDays: 0, freeKeyPerDomain: false, stripeSecretKey: "sk_test_x", stripePriceId: "price_x", stripeWebhookSecret: "whsec_test", ...config },
   });
   const server = http.createServer(app);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));

@@ -23,4 +23,20 @@ www.mxprobe.dev {
 api.mxprobe.dev {
 	reverse_proxy 127.0.0.1:8787
 	header Strict-Transport-Security "max-age=31536000"
+	# Who calls the API: client IP, user agent, method, path, status. Caddy logs
+	# no bodies, so no addresses; the key and signature headers are dropped.
+	# Kept 30 days. Read it with: sudo tail -f /var/log/caddy/api.mxprobe.dev.log
+	log {
+		output file /var/log/caddy/api.mxprobe.dev.log {
+			roll_size 20MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format filter {
+			request>headers>Authorization delete
+			request>headers>X-Api-Key delete
+			request>headers>Cookie delete
+			request>headers>Stripe-Signature delete
+		}
+	}
 }

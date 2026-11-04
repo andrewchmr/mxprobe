@@ -9,6 +9,8 @@ export interface ApiErrorBody {
   retry_after_seconds?: number;
   credits_left?: number;
   needed?: number;
+  /** On a 402: the key's payment link, for a person to open. */
+  checkout_url?: string;
   checkout_hint?: string;
   max?: number;
 }
@@ -19,6 +21,8 @@ export interface SignupResponse {
   credits: number;
   mailed: boolean;
   message: string;
+  /** The key's payment link; it never expires. */
+  checkout_url?: string;
 }
 
 export interface VerifyResponse {
@@ -33,6 +37,8 @@ export interface BalanceResponse {
   credits: number;
   checks_total: number;
   created_at: string;
+  /** The key's payment link; it never expires. */
+  buy_url?: string;
 }
 
 export interface CheckoutResponse {

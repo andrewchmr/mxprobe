@@ -15,8 +15,17 @@ builds `mxprobe-core` first). The systemd units run `dist/index.js` and
 `dist/bin/healthcheck.js`.
 
 Routes: `GET /`, `GET /v1/health`, `POST /v1/signup`, `POST /v1/verify`,
-`GET /v1/balance`, `POST /v1/credits/checkout`, `POST /v1/stripe/webhook`,
+`GET /v1/balance`, `POST /v1/credits/checkout`, `GET /v1/buy/{token}` (a key's
+payment link, a redirect to Stripe), `POST /v1/stripe/webhook`,
 `POST /v1/subscribe`, `POST /v1/feedback`.
 
 Keys are stored as SHA-256 hashes. A check whose mail server could not be
 reached is refunded. The verify log is purged after 24 hours.
+
+The free checks come once per IP address (30 days) and once per company
+domain; a repeat key starts at 0. A 402 carries `checkout_url`, the key's
+payment link. When a key drops below 20 credits, its owner gets one mail with
+that link through Sequenzy (template `credits-low` in the "MX Probe"
+company, sender hello@emails.mxprobe.dev); a purchase re-arms it.
+`admin stats` shows the funnel: signups, signups without free checks, 402s,
+checkouts, buy-link clicks and low-credit mails.

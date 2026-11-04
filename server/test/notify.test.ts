@@ -27,17 +27,18 @@ const configured = { TELEGRAM_BOT_TOKEN: "tok", TELEGRAM_CHAT_ID: "42", RESEND_A
 test("notifier: unconfigured channels are silent no-ops", async () => {
   const r = recorder();
   const n = createNotifier({}, { fetchImpl: r.fetchImpl, log: r.log });
-  assert.deepEqual(n.configured, { telegram: false, email: false });
+  assert.deepEqual(n.configured, { telegram: false, email: false, templates: false });
   assert.equal(await n.telegram("hi"), false);
   assert.equal(await n.email({ to: "a@b.co", subject: "s", text: "t" }), false);
+  assert.equal(await n.template({ to: "a@b.co", slug: "s", variables: {}, idempotencyKey: "k" }), false);
   assert.equal(r.calls.length, 0);
-  assert.deepEqual(createNotifier({ TELEGRAM_BOT_TOKEN: "tok" }).configured, { telegram: false, email: false }, "a token without a chat id is not configured");
+  assert.deepEqual(createNotifier({ TELEGRAM_BOT_TOKEN: "tok" }).configured, { telegram: false, email: false, templates: false }, "a token without a chat id is not configured");
 });
 
 test("notifier: telegram posts to the bot API with the prefix", async () => {
   const r = recorder();
   const n = createNotifier(configured, { fetchImpl: r.fetchImpl, log: r.log });
-  assert.deepEqual(n.configured, { telegram: true, email: true });
+  assert.deepEqual(n.configured, { telegram: true, email: true, templates: false });
   assert.equal(await n.telegram("signup a@b.co"), true);
   assert.equal(r.calls[0]?.url, "https://api.telegram.org/bottok/sendMessage");
   assert.deepEqual(r.calls[0]?.body, { chat_id: "42", text: "[mxprobe] signup a@b.co", disable_web_page_preview: true });
@@ -60,6 +61,23 @@ test("notifier: email posts to Resend with from, to, subject, text and reply_to"
   assert.equal((defaultFrom.calls[0]?.body as { from: string }).from, "MX Probe <hello@mxprobe.dev>");
 });
 
+test("notifier: template posts the Sequenzy slug, variables and idempotency key, with click tracking off", async () => {
+  const r = recorder();
+  const n = createNotifier({ SEQUENZY_API_KEY: "seq_x" }, { fetchImpl: r.fetchImpl, log: r.log });
+  assert.equal(n.configured.templates, true);
+  assert.equal(await n.template({ to: "a@b.co", slug: "credits-low", variables: { credits: 15, buy_url: "https://api.test/v1/buy/1-ab" }, idempotencyKey: "credits-low-1-x" }), true);
+  assert.equal(r.calls[0]?.url, "https://api.sequenzy.com/api/v1/transactional/send");
+  assert.equal(r.calls[0]?.headers["authorization"], "Bearer seq_x");
+  assert.equal(r.calls[0]?.headers["idempotency-key"], "credits-low-1-x");
+  assert.deepEqual(r.calls[0]?.body, { to: "a@b.co", slug: "credits-low", variables: { credits: 15, buy_url: "https://api.test/v1/buy/1-ab" }, trackingSettings: { clickTracking: false } });
+
+  const failed = recorder(jsonResponse(422, { error: "unknown slug" }));
+  const n2 = createNotifier({ SEQUENZY_API_KEY: "seq_x", SEQUENZY_API_URL: "https://seq.test/v1/" }, { fetchImpl: failed.fetchImpl, log: failed.log });
+  assert.equal(await n2.template({ to: "a@b.co", slug: "x", variables: {}, idempotencyKey: "k" }), false);
+  assert.equal(failed.calls[0]?.url, "https://seq.test/v1/transactional/send");
+  assert.deepEqual(failed.logged[0], ["[notify] sequenzy", 422, '{"error":"unknown slug"}']);
+});
+
 test("notifier: an HTTP failure or a thrown fetch returns false and is logged, never thrown", async () => {
   const http = recorder(jsonResponse(500, { message: "boom" }));
   const n1 = createNotifier(configured, { fetchImpl: http.fetchImpl, log: http.log });
@@ -80,10 +98,14 @@ test("notifier: an HTTP failure or a thrown fetch returns false and is logged, n
 });
 
 test("signupEmail and purchaseEmail carry the key, the numbers and the URLs", () => {
-  const s = signupEmail({ key: "mxp_abc", credits: 100, apiUrl: "https://api.test", siteUrl: "https://site.test" });
+  const s = signupEmail({ key: "mxp_abc", credits: 100, buyUrl: "https://api.test/v1/buy/7-ab", apiUrl: "https://api.test", siteUrl: "https://site.test" });
   assert.equal(s.subject, "Your MX Probe API key");
   assert.match(s.text, /\n {2}mxp_abc\n/);
-  assert.match(s.text, /100 free checks/);
+  assert.match(s.text, /It carries 100 free checks/);
+  assert.match(s.text, /payment link, good for this key at any time:\n\n {2}https:\/\/api\.test\/v1\/buy\/7-ab/);
+  const none = signupEmail({ key: "mxp_abc", credits: 0, noFreeReason: "acme.test already has a key with the free checks", buyUrl: "https://api.test/v1/buy/7-ab", apiUrl: "https://api.test", siteUrl: "https://site.test" });
+  assert.match(none.text, /It has no free checks: acme\.test already has a key with the free checks\. Buy 10,000 checks for 9 USD here:\n\n {2}https:\/\/api\.test\/v1\/buy\/7-ab/);
+  assert.doesNotMatch(none.text, /carries/);
   assert.match(s.text, /curl https:\/\/api\.test\/v1\/verify/);
   assert.match(s.text, /Bearer mxp_abc/);
   assert.match(s.text, /Docs: https:\/\/site\.test/);

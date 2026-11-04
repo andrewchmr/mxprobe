@@ -1,6 +1,7 @@
-// Best-effort side channels: a Telegram ping to the operator and an email
-// through Resend. Unconfigured means a silent no-op; a failure is logged and
-// returns false. Nothing here can fail a request.
+// Best-effort side channels: a Telegram ping to the operator, an email
+// through Resend, and a Sequenzy transactional template (the low-credit mail,
+// whose copy lives in the Sequenzy dashboard). Unconfigured means a silent
+// no-op; a failure is logged and returns false. Nothing here can fail a request.
 import { errorMessage } from "mxprobe-core";
 import type { FetchLike, Logger } from "./types.ts";
 
@@ -11,11 +12,21 @@ export interface Mail {
   replyTo?: string;
 }
 
+export interface Template {
+  to: string;
+  /** The template's API slug in Sequenzy. */
+  slug: string;
+  variables: Record<string, string | number>;
+  /** The same key never sends twice (Sequenzy keeps it 14 days). */
+  idempotencyKey: string;
+}
+
 export interface Notifier {
-  readonly configured: { telegram: boolean; email: boolean };
+  readonly configured: { telegram: boolean; email: boolean; templates: boolean };
   /** True when the message was accepted; false when unconfigured or failed. */
   telegram(text: string): Promise<boolean>;
   email(mail: Mail): Promise<boolean>;
+  template(t: Template): Promise<boolean>;
 }
 
 export interface NotifierDeps {
@@ -29,9 +40,11 @@ export function createNotifier(env: NodeJS.ProcessEnv = process.env, { fetchImpl
   const resendKey = env.RESEND_API_KEY;
   const from = env.EMAIL_FROM || "MX Probe <hello@mxprobe.dev>";
   const prefix = env.TELEGRAM_PREFIX ?? "[mxprobe]";
+  const sequenzyKey = env.SEQUENZY_API_KEY;
+  const sequenzyUrl = (env.SEQUENZY_API_URL || "https://api.sequenzy.com/api/v1").replace(/\/$/, "");
 
   return {
-    configured: { telegram: !!(tgToken && tgChat), email: !!resendKey },
+    configured: { telegram: !!(tgToken && tgChat), email: !!resendKey, templates: !!sequenzyKey },
 
     async telegram(text) {
       if (!tgToken || !tgChat) return false;
@@ -64,6 +77,23 @@ export function createNotifier(env: NodeJS.ProcessEnv = process.env, { fetchImpl
       }
       return false;
     },
+
+    async template({ to, slug, variables, idempotencyKey }) {
+      if (!sequenzyKey) return false;
+      try {
+        const res = await fetchImpl(`${sequenzyUrl}/transactional/send`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${sequenzyKey}`, "content-type": "application/json", "idempotency-key": idempotencyKey },
+          // The buy link is the point of the mail: no click-tracking redirect in front of it.
+          body: JSON.stringify({ to, slug, variables, trackingSettings: { clickTracking: false } }),
+        });
+        if (res.ok) return true;
+        log.error("[notify] sequenzy", res.status, await res.text().catch(() => ""));
+      } catch (err) {
+        log.error("[notify] sequenzy failed:", errorMessage(err));
+      }
+      return false;
+    },
   };
 }
 
@@ -72,14 +102,25 @@ export interface MailBody {
   text: string;
 }
 
-export function signupEmail({ key, credits, apiUrl, siteUrl }: { key: string; credits: number; apiUrl: string; siteUrl: string }): MailBody {
+export interface SignupMail {
+  key: string;
+  credits: number;
+  /** Why the key has no free checks, when it has none. */
+  noFreeReason?: string | null;
+  buyUrl: string;
+  apiUrl: string;
+  siteUrl: string;
+}
+
+export function signupEmail({ key, credits, noFreeReason, buyUrl, apiUrl, siteUrl }: SignupMail): MailBody {
+  const carries = noFreeReason ? `It has no free checks: ${noFreeReason}. Buy 10,000 checks for 9 USD here:\n\n  ${buyUrl}\n\nThen use it` : `It carries ${credits} free checks. Use it`;
   return {
     subject: "Your MX Probe API key",
     text: `Here is your MX Probe API key. Keep it private; it is shown only here.
 
   ${key}
 
-It carries ${credits} free checks. Use it as a bearer token:
+${carries} as a bearer token:
 
   curl ${apiUrl}/v1/verify \\
     -H "Authorization: Bearer ${key}" \\
@@ -88,8 +129,10 @@ It carries ${credits} free checks. Use it as a bearer token:
 
 Or from the CLI and MCP server: npx mxprobe check --hosted hello@example.com
 
-More checks are 9 USD per 10,000, one payment, they never expire:
-POST ${apiUrl}/v1/credits/checkout with the same header returns a payment link.
+More checks are 9 USD per 10,000, one payment, they never expire.
+Your payment link, good for this key at any time:
+
+  ${buyUrl}
 
 Docs: ${siteUrl}
 Questions or a bug: reply to this email.`,

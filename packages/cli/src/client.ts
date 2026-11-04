@@ -84,6 +84,17 @@ export interface CheckOptions {
   verifierOptions?: VerifierOptions;
 }
 
+/** What a 402 in the middle of a hosted run leaves: the run stops, the results stay. */
+export interface OutOfCredits {
+  message: string;
+  needed: number | null;
+  credits_left: number | null;
+  /** The key's payment link, for a person to open (null from a server older than 0.2.8). */
+  checkout_url: string | null;
+  /** Survivors that kept their DNS-tier verdict because no credits were left. */
+  not_probed: number;
+}
+
 export interface CheckOutput {
   results: VerifyResult[];
   summary: Summary;
@@ -91,6 +102,8 @@ export interface CheckOutput {
   hosted: number;
   /** Credits left on the key after the hosted calls, when any were made. */
   credits_left: number | null;
+  /** Set when the key ran out of credits before every survivor was probed. */
+  out_of_credits: OutOfCredits | null;
 }
 
 /** The hosted API takes at most this many addresses per call. */
@@ -106,13 +119,26 @@ export async function checkEmails(emails: readonly string[], { hosted = false, c
   const results = await local.verifyBatch(emails);
   let hostedCount = 0;
   let creditsLeft: number | null = null;
+  let outOfCredits: OutOfCredits | null = null;
   if (hosted) {
     if (!client) throw new Error("hosted check needs an API client");
     const survivors = results.filter((r) => r.action !== "kill").map((r) => r.email);
     if (survivors.length) {
       const byEmail = new Map<string, VerifyResult>();
+      const unsent = new Set<string>();
       for (let i = 0; i < survivors.length; i += HOSTED_BATCH) {
-        const res = await client.verify(survivors.slice(i, i + HOSTED_BATCH));
+        let res: VerifyResponse;
+        try {
+          res = await client.verify(survivors.slice(i, i + HOSTED_BATCH));
+        } catch (err) {
+          // A 402 ends the run, not the results: the chunks already paid for stay.
+          if (!(err instanceof ApiError) || err.status !== 402) throw err;
+          const rest = survivors.slice(i);
+          for (const e of rest) unsent.add(e);
+          creditsLeft = err.body.credits_left ?? creditsLeft;
+          outOfCredits = { message: err.message, needed: err.body.needed ?? null, credits_left: err.body.credits_left ?? null, checkout_url: err.body.checkout_url ?? null, not_probed: rest.length };
+          break;
+        }
         for (const r of res.results) byEmail.set(r.email, r);
         creditsLeft = res.credits_left ?? creditsLeft;
       }
@@ -121,9 +147,11 @@ export async function checkEmails(emails: readonly string[], { hosted = false, c
         if (h) {
           results[i] = h;
           hostedCount++;
+        } else if (unsent.has(r.email)) {
+          results[i] = { ...r, reason: `${r.reason.replace(/; mailbox not probed$/, "")}; mailbox not probed: no credits left` };
         }
       }
     }
   }
-  return { results, summary: summarize(results), hosted: hostedCount, credits_left: creditsLeft };
+  return { results, summary: summarize(results), hosted: hostedCount, credits_left: creditsLeft, out_of_credits: outOfCredits };
 }

@@ -174,7 +174,7 @@ test("db: stats and listKeys", () => {
     assert.deepEqual(s.verdict_mix, { checks: 0, send: 0, hold: 0, kill: 0 });
     const keys = db.listKeys();
     assert.equal(keys.length, 2);
-    assert.deepEqual(Object.keys(keys[0] ?? {}), ["id", "key_prefix", "email", "credits", "checks_total", "revoked", "signup_ip", "created_at", "last_used_at"]);
+    assert.deepEqual(Object.keys(keys[0] ?? {}), ["id", "key_prefix", "email", "credits", "checks_total", "revoked", "signup_ip", "created_at", "last_used_at", "low_notice_at"]);
     assert.equal(keys[0]?.email, "k2@good.test", "newest first");
     assert.ok(!("key_hash" in (keys[0] ?? {})), "the hash is never listed");
   } finally {
@@ -195,6 +195,46 @@ test("db: a file on disk is created, reopened and in WAL mode", async () => {
   db = openDb(path);
   try {
     assert.equal(db.keyByEmail("k1@good.test")?.credits, 100);
+  } finally {
+    db.close();
+  }
+});
+
+test("db: an old file without low_notice_at gains the column; claimLowNotice is once until a purchase; funnel counts", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { DatabaseSync } = await import("node:sqlite");
+  const path = join(mkdtempSync(join(tmpdir(), "mxprobe-db-")), "old.sqlite");
+  const old = new DatabaseSync(path);
+  old.exec("CREATE TABLE keys (id INTEGER PRIMARY KEY, key_hash TEXT NOT NULL UNIQUE, key_prefix TEXT NOT NULL, email TEXT NOT NULL UNIQUE, credits INTEGER NOT NULL DEFAULT 0, checks_total INTEGER NOT NULL DEFAULT 0, revoked INTEGER NOT NULL DEFAULT 0, signup_ip TEXT, created_at TEXT NOT NULL DEFAULT 'x', last_used_at TEXT)");
+  old.exec("INSERT INTO keys (key_hash, key_prefix, email, credits) VALUES ('h', 'mxp_1', 'k1@good.test', 15)");
+  old.close();
+  const db = openDb(path);
+  try {
+    const k = db.keyByEmail("k1@good.test");
+    assert.equal(k?.low_notice_at, null, "the old row reads with the new column");
+    assert.equal(db.claimLowNotice(1), true);
+    assert.equal(db.claimLowNotice(1), false, "only once");
+    assert.ok(db.keyById(1)?.low_notice_at);
+    assert.equal(db.stats().low_credit_keys, 1);
+    db.addCredits(1, 5, "refund", "unreachable");
+    assert.equal(db.claimLowNotice(1), false, "a refund does not reset it");
+    db.addCredits(1, 10000, "purchase", "cs_1");
+    assert.equal(db.keyById(1)?.low_notice_at, null, "a purchase resets it");
+    assert.equal(db.claimLowNotice(1), true);
+    db.releaseLowNotice(1);
+    assert.equal(db.claimLowNotice(1), true, "a release allows the next try");
+
+    db.createKey({ ...newKey(2), email: "k2@acme.test" });
+    assert.equal(db.keysOnDomain("acme.test"), 1);
+    assert.equal(db.keysOnDomain("good.test"), 1);
+    assert.equal(db.keysOnDomain("other.test"), 0);
+
+    db.countFunnel("verify_402");
+    db.countFunnel("verify_402", 2);
+    db.countFunnel("checkout");
+    assert.deepEqual(db.stats().funnel, { checkout: 1, verify_402: 3 });
   } finally {
     db.close();
   }

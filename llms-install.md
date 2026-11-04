@@ -33,7 +33,7 @@ the reason. Without a key the tools run the DNS tier on this machine.
 |---|---|
 | `verify_email` | One address: send, hold or kill, with the reason. |
 | `verify_batch` | Up to 500 addresses in one call. |
-| `signup` | Make a hosted key with 100 free checks. |
+| `signup` | Make a hosted key with 100 free checks (once per IP address and company domain). |
 | `balance` | The credits left on the key. |
 | `buy_credits` | A Stripe link: 9 USD per 10,000 checks. |
 

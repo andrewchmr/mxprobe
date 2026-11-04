@@ -60,6 +60,7 @@ fi
 echo "== services"
 cp deploy/mxprobe-api.service deploy/mxprobe-health.service deploy/mxprobe-health.timer /etc/systemd/system/
 cp deploy/Caddyfile /etc/caddy/Caddyfile
+install -d -o caddy -g caddy -m 750 /var/log/caddy   # the API access log
 systemctl daemon-reload
 systemctl enable -q --now mxprobe-api mxprobe-health.timer
 systemctl restart mxprobe-api

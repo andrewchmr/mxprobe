@@ -105,9 +105,11 @@ test("cli: signup saves the key and the api url to the config file", async () =>
 
 test("cli: balance --json and buy --packs", async () => {
   const env = freshEnv({ MXPROBE_API_KEY: "mxp_env" });
-  const balance = { email: "a@b.co", credits: 3, checks_total: 97, created_at: "2026-09-09T00:00:00Z" };
+  const balance = { email: "a@b.co", credits: 3, checks_total: 97, created_at: "2026-09-09T00:00:00Z", buy_url: "https://api.test/v1/buy/1-ab" };
   let r = await run(["balance", "--json"], env, { "GET /v1/balance": { body: balance } });
   assert.deepEqual(JSON.parse(r.stdout), balance);
+  r = await run(["balance"], env, { "GET /v1/balance": { body: balance } });
+  assert.equal(r.stdout, "3 credits left on the key for a@b.co (97 checks so far)\nPayment link for this key: https://api.test/v1/buy/1-ab\n");
   const checkout = { url: "https://checkout.stripe.com/c/pay/cs_1", credits: 30000, amount_usd: 27, packs: 3, session_id: "cs_1", message: "" };
   r = await run(["buy", "--packs", "3"], env, { "POST /v1/credits/checkout": { body: checkout } });
   assert.equal(r.code, 0);
@@ -118,13 +120,21 @@ test("cli: balance --json and buy --packs", async () => {
   assert.deepEqual(JSON.parse(r.stdout), checkout);
 });
 
-test("cli: an API error prints status and message; a 402 adds the checkout hint", async () => {
+test("cli: out of credits prints every result, then the payment link, and exits 1", async () => {
   const env = freshEnv({ MXPROBE_API_KEY: "mxp_env" });
-  const r = await run(["check", "--hosted", "a@good.test"], env, {
-    "POST /v1/verify": { status: 402, body: { error: "insufficient_credits", message: "This call needs 1 credits and the key has 0.", checkout_hint: "POST /v1/credits/checkout returns a payment link" } },
-  });
+  const dry = { status: 402, body: { error: "insufficient_credits", message: "This call needs 1 credits and the key has 0.", credits_left: 0, needed: 1, checkout_url: "https://api.test/v1/buy/1-ab", checkout_hint: "x" } };
+  const r = await run(["check", "--hosted", "a@good.test"], env, { "POST /v1/verify": dry });
   assert.equal(r.code, 1);
-  assert.equal(r.stderr, "402: This call needs 1 credits and the key has 0.\nPOST /v1/credits/checkout returns a payment link\n");
+  assert.match(r.stdout, /^send OK {3}a@good\.test {2}.*; mailbox not probed: no credits left\n$/);
+  assert.match(r.stderr, /Out of credits: 1 address was not probed and keeps its DNS-tier verdict\. This call needs 1 credits and the key has 0\.\nBuy 10,000 checks for 9 USD here: https:\/\/api\.test\/v1\/buy\/1-ab\n$/);
+  const old = await run(["check", "--hosted", "--json", "a@good.test"], env, { "POST /v1/verify": { status: 402, body: { error: "insufficient_credits", message: "dry" } } });
+  assert.equal(old.code, 1);
+  assert.equal(JSON.parse(old.stdout).out_of_credits.checkout_url, null);
+  assert.match(old.stderr, /Run `npx mxprobe buy` for a payment link/, "an older server without checkout_url");
+});
+
+test("cli: an API error prints status and message", async () => {
+  const env = freshEnv({ MXPROBE_API_KEY: "mxp_env" });
   const revoked = await run(["balance"], env, { "GET /v1/balance": { status: 403, body: { error: "key_revoked", message: "This key was revoked." } } });
   assert.equal(revoked.code, 1);
   assert.equal(revoked.stderr, "403: This key was revoked.\n");

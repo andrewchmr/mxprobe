@@ -24,6 +24,10 @@ const app = createApp({
   notifier,
   config: {
     freeCredits: Number(env.FREE_CREDITS || 100),
+    freeKeyIpDays: Number(env.FREE_KEY_IP_DAYS ?? 30),
+    freeKeyPerDomain: env.FREE_KEY_PER_DOMAIN !== "0",
+    lowCredits: Number(env.LOW_CREDITS || 20),
+    lowCreditsTemplate: env.SEQUENZY_LOW_CREDITS_SLUG || "credits-low",
     packCredits: Number(env.PACK_CREDITS || 10_000),
     packUsd: Number(env.PACK_USD || 9),
     checksPerMinute: Number(env.CHECKS_PER_MINUTE || 60),
@@ -40,7 +44,7 @@ const app = createApp({
 const server = http.createServer(app);
 server.keepAliveTimeout = 65_000;
 server.listen(PORT, HOST, () => {
-  console.info(`mxprobe-server ${VERSION} on http://${HOST}:${PORT} db=${DB_PATH} telegram=${notifier.configured.telegram} email=${notifier.configured.email} stripe=${!!(env.STRIPE_SECRET_KEY && env.STRIPE_PRICE_ID)}`);
+  console.info(`mxprobe-server ${VERSION} on http://${HOST}:${PORT} db=${DB_PATH} telegram=${notifier.configured.telegram} email=${notifier.configured.email} sequenzy=${notifier.configured.templates} stripe=${!!(env.STRIPE_SECRET_KEY && env.STRIPE_PRICE_ID)}`);
 });
 
 // The privacy line on the site says 24 hours. Keep it true.

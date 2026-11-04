@@ -6,7 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { readConfig, writeConfig, type Env } from "./config.ts";
-import { createClient, checkEmails, ApiError, type FetchLike } from "./client.ts";
+import { createClient, checkEmails, ApiError, type FetchLike, type OutOfCredits } from "./client.ts";
 import { version } from "./version.ts";
 import { errorMessage, type VerifierOptions } from "mxprobe-core";
 
@@ -27,9 +27,22 @@ function text(obj: object): CallToolResult {
 function failure(err: unknown): CallToolResult {
   const body =
     err instanceof ApiError
-      ? { error: err.body.error ?? "api_error", status: err.status, message: err.message, ...(err.body.checkout_hint ? { checkout_hint: err.body.checkout_hint } : {}) }
+      ? {
+          error: err.body.error ?? "api_error",
+          status: err.status,
+          message: err.message,
+          ...(err.body.checkout_url ? { checkout_url: err.body.checkout_url } : {}),
+          ...(err.body.checkout_hint ? { checkout_hint: err.body.checkout_hint } : {}),
+        }
       : { error: "failed", message: errorMessage(err) };
   return { ...text(body), isError: true };
+}
+
+/** The agent cannot pay; the person who runs it can. Say so next to the link. */
+function outOfCredits(o: OutOfCredits | null): object {
+  if (!o) return {};
+  const where = o.checkout_url ? "Show checkout_url to your operator" : "Call buy_credits and show the link to your operator";
+  return { out_of_credits: { ...o, next_step: `${where}: a person pays ${o.checkout_url ? "there" : "at that link"}, and the credits land on this key. The addresses not probed keep their DNS-tier verdict.` } };
 }
 
 export interface McpOptions {
@@ -63,7 +76,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
         const { cfg, client } = state();
         const useHosted = hosted ?? !!cfg.apiKey;
         const out = await checkEmails([email], { hosted: useHosted, client, verifierOptions });
-        return text({ ...out.results[0], hosted: useHosted, credits_left: out.credits_left });
+        return text({ ...out.results[0], hosted: useHosted, credits_left: out.credits_left, ...outOfCredits(out.out_of_credits) });
       } catch (err) {
         return failure(err);
       }
@@ -74,7 +87,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
     "verify_batch",
     {
       title: "Verify a list of email addresses",
-      description: `Check up to 500 addresses in one call. ${VERDICT_DOC} DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each.`,
+      description: `Check up to 500 addresses in one call. ${VERDICT_DOC} DNS kills cost nothing; with a key the survivors go to the hosted probe at 1 credit each. If the key runs out of credits, every result still comes back: out_of_credits says how many were not probed and carries checkout_url, a payment link for your operator.`,
       inputSchema: { emails: z.array(z.string()).min(1).max(500).describe("The addresses to check"), hosted: z.boolean().optional().describe("Probe mailboxes on the hosted tier (default: yes when a key is configured)") },
       annotations: LOOKUP,
     },
@@ -83,7 +96,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
         const { cfg, client } = state();
         const useHosted = hosted ?? !!cfg.apiKey;
         const out = await checkEmails(emails, { hosted: useHosted, client, verifierOptions });
-        return text({ results: out.results, summary: out.summary, hosted: useHosted, credits_left: out.credits_left });
+        return text({ results: out.results, summary: out.summary, hosted: useHosted, credits_left: out.credits_left, ...outOfCredits(out.out_of_credits) });
       } catch (err) {
         return failure(err);
       }
@@ -94,7 +107,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
     "signup",
     {
       title: "Create an MX Probe API key",
-      description: "Sign up with an email address. Returns an API key with 100 free checks and saves it locally for the other tools. The key is also mailed to the address. One key per address.",
+      description: "Sign up with an email address. Returns an API key and saves it locally for the other tools. The key is also mailed to the address. One key per address; the 100 free checks come once per IP address and company domain, and a repeat key starts at 0 with a checkout_url for your operator.",
       inputSchema: { email: z.string().describe("The operator's email address, where the key is mailed") },
       annotations: CREATES,
     },
@@ -103,7 +116,7 @@ export function buildMcpServer({ env = process.env, fetchImpl, verifierOptions }
         const { cfg, client } = state();
         const res = await client.signup(email);
         const path = writeConfig({ api_key: res.api_key, api_url: cfg.apiUrl, email: res.email }, env);
-        return text({ ok: true, email: res.email, credits: res.credits, api_key: res.api_key, saved_to: path, message: res.message });
+        return text({ ok: true, email: res.email, credits: res.credits, api_key: res.api_key, saved_to: path, message: res.message, ...(res.checkout_url ? { checkout_url: res.checkout_url } : {}) });
       } catch (err) {
         return failure(err);
       }

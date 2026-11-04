@@ -2,7 +2,7 @@
 // canned verifier, fake Stripe, and a notifier that records what it sent.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hashKey, newApiKey, HttpError, VERSION } from "../src/app.ts";
+import { buyToken, hashKey, newApiKey, HttpError, VERSION } from "../src/app.ts";
 import { signPayload } from "../src/stripe.ts";
 import { boot, canned, fakeVerifier, jsonResponse } from "./helpers.ts";
 
@@ -197,6 +197,7 @@ test("verify: 402 when the key runs dry, with the checkout hint", async () => {
     assert.equal(r.body.credits_left, 1);
     assert.equal(r.body.needed, 2);
     assert.match(r.body.checkout_hint, /credits\/checkout/);
+    assert.match(r.body.checkout_url, /^https:\/\/api\.mxprobe\.dev\/v1\/buy\/\d+-[0-9a-f]{24}$/);
     // the failed call charged nothing
     assert.equal(t.db.keyByEmail("ops@good.test")?.credits, 1);
     // a call of only syntax kills is free and works with zero credits
@@ -423,7 +424,7 @@ test("health, 404, CORS preflight, oversized body", async () => {
     assert.equal(h.body.payments, true);
     assert.equal(h.body.version, VERSION);
     assert.match(VERSION, /^\d+\.\d+\.\d+$/, "the version comes from package.json");
-    assert.deepEqual(h.body.notifier, { telegram: true, email: true });
+    assert.deepEqual(h.body.notifier, { telegram: true, email: true, templates: true });
     assert.equal(typeof h.body.uptime_s, "number");
     const nf = await t.api("GET", "/nope");
     assert.equal(nf.status, 404);
@@ -467,4 +468,159 @@ test("HttpError carries status and a JSON body", () => {
   assert.equal(e.status, 429);
   assert.equal(e.message, "slow down");
   assert.deepEqual(e.body, { error: "rate_limited", message: "slow down", retry_after_seconds: 3 });
+});
+
+test("signup: the free checks come once per IP and once per company domain; a repeat key starts at 0", async () => {
+  const t = await boot({ freeKeyIpDays: 30, freeKeyPerDomain: true, trustProxy: true });
+  try {
+    const from = (ip: string) => ({ "x-forwarded-for": ip });
+    const first = await t.api("POST", "/v1/signup", { email: "ann@acme.test" }, from("198.51.100.1"));
+    assert.equal(first.body.credits, 100);
+    assert.match(first.body.checkout_url, /\/v1\/buy\/\d+-/);
+
+    const sameIp = await t.api("POST", "/v1/signup", { email: "bob@other.test" }, from("198.51.100.1"));
+    assert.equal(sameIp.status, 201, "the signup works");
+    assert.equal(sameIp.body.credits, 0);
+    assert.match(sameIp.body.message, /No free checks: this IP address already has a key with the free checks\. A person can buy 10,000 checks for 9 USD at checkout_url/);
+    const mail = t.notifier.sent.emails.at(-1)?.text ?? "";
+    assert.match(mail, /It has no free checks: this IP address/);
+    assert.ok(mail.includes(sameIp.body.checkout_url), "the key mail carries the payment link");
+
+    const sameDomain = await t.api("POST", "/v1/signup", { email: "cat@acme.test" }, from("198.51.100.2"));
+    assert.equal(sameDomain.body.credits, 0);
+    assert.match(sameDomain.body.message, /acme\.test already has a key/);
+
+    const freeMail = await t.api("POST", "/v1/signup", { email: "dan@gmail.com" }, from("198.51.100.3"));
+    assert.equal(freeMail.body.credits, 100, "a free-mail domain is not a company");
+    const freeMail2 = await t.api("POST", "/v1/signup", { email: "eve@gmail.com" }, from("198.51.100.4"));
+    assert.equal(freeMail2.body.credits, 100);
+
+    assert.equal(t.db.keyByEmail("bob@other.test")?.credits, 0);
+    assert.deepEqual(t.db.stats().funnel, { signup: 3, signup_no_free: 2 });
+  } finally {
+    await t.close();
+  }
+});
+
+test("signup: the IP rule forgets after freeKeyIpDays", async () => {
+  let clock = Date.parse("2026-11-01T00:00:00Z");
+  const t = await boot({ freeKeyIpDays: 30 }, { now: () => clock });
+  try {
+    await t.signup("a@one.test");
+    t.db.raw.prepare("UPDATE keys SET created_at = '2026-10-03T00:00:00.000Z'").run();
+    const later = await t.api("POST", "/v1/signup", { email: "b@two.test" });
+    assert.equal(later.body.credits, 0, "29 days on, the same IP gets none");
+    t.db.raw.prepare("UPDATE keys SET created_at = '2026-09-01T00:00:00.000Z'").run();
+    clock = Date.parse("2026-11-02T00:00:00Z");
+    assert.equal((await t.api("POST", "/v1/signup", { email: "c@three.test" })).body.credits, 100, "after 30 days it gets them again");
+  } finally {
+    await t.close();
+  }
+});
+
+test("buy link: redirects to a fresh Stripe Checkout for that key; a wrong or revoked link does not", async () => {
+  const t = await boot();
+  try {
+    const { headers: h, id } = await t.signup();
+    const row = t.db.keyById(id);
+    assert.ok(row);
+    const token = buyToken(row);
+    const b = await t.api("GET", "/v1/balance", undefined, h);
+    assert.equal(b.body.buy_url, `https://api.mxprobe.dev/v1/buy/${token}`);
+
+    const res = await fetch(`${t.base}/v1/buy/${token}?packs=3`, { redirect: "manual" });
+    assert.equal(res.status, 303);
+    assert.equal(res.headers.get("location"), "https://checkout.stripe.com/c/pay/cs_test_123");
+    const call = t.stripe.calls.at(-1);
+    assert.equal(call?.body.get("metadata[key_id]"), String(id));
+    assert.equal(call?.body.get("line_items[0][quantity]"), "3");
+    assert.equal((await fetch(`${t.base}/v1/buy/${token}`, { redirect: "manual" })).status, 303, "the link works again and again");
+    assert.equal(t.stripe.calls.at(-1)?.body.get("line_items[0][quantity]"), "1");
+
+    for (const bad of [`${id}-${"0".repeat(24)}`, `${id + 1}-${token.split("-")[1]}`, "nope", `${id}-short`]) {
+      const r = await t.api("GET", `/v1/buy/${bad}`);
+      assert.equal(r.status, 404, bad);
+      assert.equal(r.body.error, "unknown_link");
+    }
+    assert.equal((await t.api("POST", `/v1/buy/${token}`)).status, 404, "GET only");
+    t.db.setRevoked("ops@good.test", true);
+    assert.equal((await t.api("GET", `/v1/buy/${token}`)).status, 403);
+    assert.deepEqual(t.db.stats().funnel, { buy_link: 2, checkout: 2, signup: 1 });
+  } finally {
+    await t.close();
+  }
+});
+
+test("low credits: one Sequenzy mail with the payment link when a key drops below 20, again only after a purchase", async () => {
+  const t = await boot();
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  try {
+    const { headers: h, id } = await t.signup();
+    t.db.raw.prepare("UPDATE keys SET credits = 22").run();
+    await t.api("POST", "/v1/verify", { emails: ["a@good.test", "b@good.test"] }, h);
+    await settle();
+    assert.equal(t.notifier.sent.templates.length, 0, "20 left is not below 20");
+
+    await t.api("POST", "/v1/verify", { emails: ["c@good.test"] }, h);
+    await settle();
+    assert.equal(t.notifier.sent.templates.length, 1);
+    const sent = t.notifier.sent.templates[0];
+    const row = t.db.keyById(id);
+    assert.ok(row);
+    assert.equal(sent?.to, "ops@good.test");
+    assert.equal(sent?.slug, "credits-low");
+    assert.deepEqual(sent?.variables, { credits: 19, buy_url: `https://api.mxprobe.dev/v1/buy/${buyToken(row)}`, pack_credits: "10,000", pack_usd: 9 });
+    assert.match(sent?.idempotencyKey ?? "", new RegExp(`^credits-low-${id}-`));
+    assert.match(t.notifier.sent.telegrams.at(-1) ?? "", /low credits: ops@good.test has 19 left/);
+
+    await t.api("POST", "/v1/verify", { emails: ["d@good.test"] }, h);
+    t.db.raw.prepare("UPDATE keys SET credits = 0").run();
+    await t.api("POST", "/v1/verify", { emails: ["e@good.test"] }, h);
+    await settle();
+    assert.equal(t.notifier.sent.templates.length, 1, "no second mail, not on a 402 either");
+
+    t.db.addCredits(id, 10000, "purchase", "cs_x");
+    t.db.raw.prepare("UPDATE keys SET credits = 3").run();
+    await t.api("POST", "/v1/verify", { emails: ["f@good.test"] }, h);
+    await settle();
+    assert.equal(t.notifier.sent.templates.length, 2, "after a purchase the next drop mails again");
+    assert.equal(t.db.stats().funnel.low_notice, 2);
+  } finally {
+    await t.close();
+  }
+});
+
+test("low credits: a 402 sends the mail when none went out; a failed send is tried again on the next call", async () => {
+  const t = await boot();
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  try {
+    const { headers: h } = await t.signup();
+    t.db.raw.prepare("UPDATE keys SET credits = 0").run();
+    let fail = true;
+    t.notifier.template = async (m) => (fail ? false : (t.notifier.sent.templates.push(m), true));
+    assert.equal((await t.api("POST", "/v1/verify", { emails: ["a@good.test"] }, h)).status, 402);
+    await settle();
+    assert.equal(t.db.keyByEmail("ops@good.test")?.low_notice_at, null, "released after the failure");
+    fail = false;
+    await t.api("POST", "/v1/verify", { emails: ["a@good.test"] }, h);
+    await settle();
+    assert.equal(t.notifier.sent.templates.length, 1);
+    assert.equal(t.notifier.sent.templates[0]?.variables["credits"], 0);
+    assert.deepEqual(t.db.stats().funnel, { low_notice: 1, signup: 1, verify_402: 2 });
+  } finally {
+    await t.close();
+  }
+});
+
+test("low credits: without Sequenzy nothing is claimed or sent", async () => {
+  const t = await boot();
+  try {
+    const { headers: h } = await t.signup();
+    (t.notifier as { configured: { templates: boolean } }).configured.templates = false;
+    t.db.raw.prepare("UPDATE keys SET credits = 5").run();
+    await t.api("POST", "/v1/verify", { emails: ["a@good.test"] }, h);
+    assert.equal(t.db.keyByEmail("ops@good.test")?.low_notice_at, null);
+  } finally {
+    await t.close();
+  }
 });

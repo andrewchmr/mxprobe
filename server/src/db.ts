@@ -1,5 +1,6 @@
 // One SQLite file. Keys and credits, a 24-hour verify log, daily counts
-// without addresses, Stripe event ids, subscribers and feedback.
+// without addresses, daily funnel counts, Stripe event ids, subscribers and
+// feedback.
 import { DatabaseSync } from "node:sqlite";
 import { summarize, type VerifyResult } from "mxprobe-core";
 
@@ -16,7 +17,8 @@ CREATE TABLE IF NOT EXISTS keys (
   revoked INTEGER NOT NULL DEFAULT 0,
   signup_ip TEXT,
   created_at TEXT NOT NULL DEFAULT (${NOW}),
-  last_used_at TEXT
+  last_used_at TEXT,
+  low_notice_at TEXT
 );
 CREATE INDEX IF NOT EXISTS keys_signup_ip ON keys(signup_ip, created_at);
 CREATE TABLE IF NOT EXISTS credit_events (
@@ -47,6 +49,12 @@ CREATE TABLE IF NOT EXISTS stats_daily (
   send INTEGER NOT NULL DEFAULT 0,
   hold INTEGER NOT NULL DEFAULT 0,
   kill INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS funnel_daily (
+  day TEXT NOT NULL,
+  name TEXT NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, name)
 );
 CREATE TABLE IF NOT EXISTS stripe_events (
   id TEXT PRIMARY KEY,
@@ -80,6 +88,8 @@ export interface KeyRow {
   signup_ip: string | null;
   created_at: string;
   last_used_at: string | null;
+  /** When the low-credit mail went out; cleared by a purchase. */
+  low_notice_at: string | null;
 }
 
 /** A key as `admin keys` lists it: everything but the hash. */
@@ -103,6 +113,9 @@ export interface DailyStats {
   kill: number;
 }
 
+/** Steps of the way to a payment, counted per day. */
+export type FunnelEvent = "signup" | "signup_no_free" | "verify_402" | "checkout" | "buy_link" | "low_notice";
+
 export interface Stats {
   keys: number;
   keys_revoked: number;
@@ -114,6 +127,10 @@ export interface Stats {
   feedback: number;
   last_30_days: DailyStats[];
   verdict_mix: Omit<DailyStats, "day">;
+  /** All-time totals per funnel event. */
+  funnel: Partial<Record<FunnelEvent, number>>;
+  /** Keys that were sent the low-credit mail and have not bought since. */
+  low_credit_keys: number;
 }
 
 export interface Db {
@@ -123,10 +140,16 @@ export interface Db {
   keyByHash(hash: string): KeyRow | null;
   keyByEmail(email: string): KeyRow | null;
   signupsFromIp(ip: string, sinceIso: string): number;
+  /** Keys whose address is on this domain. */
+  keysOnDomain(domain: string): number;
   /** Atomic: false when the key has fewer than n credits. */
   chargeCredits(keyId: number, n: number): boolean;
   addCredits(keyId: number, n: number, kind: CreditKind, ref?: string | null): KeyRow;
   setRevoked(email: string, flag: boolean): boolean;
+  /** True for the one caller that may send the low-credit mail; a purchase clears it. */
+  claimLowNotice(keyId: number): boolean;
+  releaseLowNotice(keyId: number): void;
+  countFunnel(name: FunnelEvent, n?: number): void;
   logVerify(keyId: number, results: readonly VerifyResult[], ms: number): void;
   /** Delete log rows older than the ISO timestamp; returns how many. */
   purgeLog(olderThanIso: string): number;
@@ -152,6 +175,9 @@ export function openDb(path = ":memory:"): Db {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;");
   db.exec(SCHEMA);
+  // Columns added after the first deploy; CREATE TABLE IF NOT EXISTS skips them on an old file.
+  const keyColumns = new Set(db.prepare("PRAGMA table_info(keys)").all().map((c) => String(c["name"])));
+  if (!keyColumns.has("low_notice_at")) db.exec("ALTER TABLE keys ADD COLUMN low_notice_at TEXT");
 
   const q = {
     insertKey: db.prepare("INSERT INTO keys (key_hash, key_prefix, email, credits, signup_ip) VALUES (?, ?, ?, ?, ?)"),
@@ -159,10 +185,14 @@ export function openDb(path = ":memory:"): Db {
     keyByHash: db.prepare("SELECT * FROM keys WHERE key_hash = ?"),
     keyByEmail: db.prepare("SELECT * FROM keys WHERE email = ?"),
     signupsFromIp: db.prepare("SELECT COUNT(*) AS n FROM keys WHERE signup_ip = ? AND created_at > ?"),
+    keysOnDomain: db.prepare("SELECT COUNT(*) AS n FROM keys WHERE substr(email, instr(email, '@') + 1) = ?"),
     charge: db.prepare(`UPDATE keys SET credits = credits - ?, checks_total = checks_total + ?, last_used_at = ${NOW} WHERE id = ? AND credits >= ?`),
     credit: db.prepare("UPDATE keys SET credits = credits + ? WHERE id = ?"),
     creditEvent: db.prepare("INSERT INTO credit_events (key_id, delta, kind, ref) VALUES (?, ?, ?, ?)"),
     setRevoked: db.prepare("UPDATE keys SET revoked = ? WHERE email = ?"),
+    claimLowNotice: db.prepare(`UPDATE keys SET low_notice_at = ${NOW} WHERE id = ? AND low_notice_at IS NULL`),
+    releaseLowNotice: db.prepare("UPDATE keys SET low_notice_at = NULL WHERE id = ?"),
+    countFunnel: db.prepare("INSERT INTO funnel_daily (day, name, n) VALUES (?, ?, ?) ON CONFLICT(day, name) DO UPDATE SET n = n + excluded.n"),
     logVerify: db.prepare("INSERT INTO verify_log (key_id, email, action, verdict, reason, mx, smtp, catch_all, ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
     purgeLog: db.prepare("DELETE FROM verify_log WHERE created_at < ?"),
     bumpStats: db.prepare(`INSERT INTO stats_daily (day, checks, send, hold, kill) VALUES (?, ?, ?, ?, ?)
@@ -205,6 +235,7 @@ export function openDb(path = ":memory:"): Db {
     keyByHash: (hash) => plain<KeyRow>(q.keyByHash.get(hash)),
     keyByEmail: (email) => plain<KeyRow>(q.keyByEmail.get(email)),
     signupsFromIp: (ip, sinceIso) => count(q.signupsFromIp.get(ip, sinceIso)),
+    keysOnDomain: (domain) => count(q.keysOnDomain.get(domain)),
 
     chargeCredits(keyId, n) {
       if (n <= 0) return true;
@@ -214,10 +245,14 @@ export function openDb(path = ":memory:"): Db {
       return transaction("BEGIN IMMEDIATE", () => {
         q.credit.run(n, keyId);
         q.creditEvent.run(keyId, n, kind, ref);
+        if (kind === "purchase") q.releaseLowNotice.run(keyId);
         return keyRow(keyId);
       });
     },
     setRevoked: (email, flag) => Number(q.setRevoked.run(flag ? 1 : 0, email).changes) === 1,
+    claimLowNotice: (keyId) => Number(q.claimLowNotice.run(keyId).changes) === 1,
+    releaseLowNotice: (keyId) => void q.releaseLowNotice.run(keyId),
+    countFunnel: (name, n = 1) => void q.countFunnel.run(new Date().toISOString().slice(0, 10), name, n),
 
     logVerify(keyId, results, ms) {
       const day = new Date().toISOString().slice(0, 10);
@@ -251,9 +286,11 @@ export function openDb(path = ":memory:"): Db {
         feedback: count(one("SELECT COUNT(*) AS n FROM feedback")),
         last_30_days: plainAll<DailyStats>(db.prepare("SELECT day, checks, send, hold, kill FROM stats_daily WHERE day >= date('now', '-30 days') ORDER BY day").all()),
         verdict_mix: { checks: Number(mix["checks"] ?? 0), send: Number(mix["send"] ?? 0), hold: Number(mix["hold"] ?? 0), kill: Number(mix["kill"] ?? 0) },
+        funnel: Object.fromEntries(db.prepare("SELECT name, SUM(n) AS n FROM funnel_daily GROUP BY name ORDER BY name").all().map((r) => [String(r["name"]), Number(r["n"])])),
+        low_credit_keys: count(one("SELECT COUNT(*) AS n FROM keys WHERE low_notice_at IS NOT NULL")),
       };
     },
-    listKeys: () => plainAll<KeyListing>(db.prepare("SELECT id, key_prefix, email, credits, checks_total, revoked, signup_ip, created_at, last_used_at FROM keys ORDER BY created_at DESC, id DESC").all()),
+    listKeys: () => plainAll<KeyListing>(db.prepare("SELECT id, key_prefix, email, credits, checks_total, revoked, signup_ip, created_at, last_used_at, low_notice_at FROM keys ORDER BY created_at DESC, id DESC").all()),
     close: () => db.close(),
   };
 }

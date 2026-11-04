@@ -91,7 +91,7 @@
     {
       "name": "signup",
       "title": "Create an MX Probe API key",
-      "description": "Sign up with an email address. Returns an API key with 100 free checks and saves it locally for the other tools. The key is also mailed to the address. One key per address.",
+      "description": "Sign up with an email address. Returns an API key and saves it locally for the other tools. The key is also mailed to the address. One key per address; the 100 free checks come once per IP address and company domain, and a repeat key starts at 0 with a checkout_url for your operator.",
       "inputSchema": {
         "type": "object",
         "properties": {

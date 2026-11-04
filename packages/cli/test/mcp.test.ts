@@ -151,10 +151,11 @@ test("mcp: signup saves the key, and the next call uses it", async () => {
   }
 });
 
-test("mcp: API errors come back as isError with status, error and the checkout hint", async () => {
+test("mcp: out of credits returns the verdict with out_of_credits; other API errors are isError", async () => {
   const t = await connect(freshEnv({ MXPROBE_API_KEY: "mxp_env" }), {
     "POST /v1/credits/checkout": { body: { url: "https://checkout.test/x", credits: 20000, amount_usd: 18, packs: 2, session_id: "cs", message: "" } },
-    "POST /v1/verify": { status: 402, body: { error: "insufficient_credits", message: "dry", checkout_hint: "buy more" } },
+    "POST /v1/verify": { status: 402, body: { error: "insufficient_credits", message: "dry", credits_left: 0, needed: 1, checkout_url: "https://api.test/v1/buy/1-ab", checkout_hint: "buy more" } },
+    "GET /v1/balance": { status: 403, body: { error: "key_revoked", message: "revoked" } },
   });
   try {
     const buy = await t.call("buy_credits", { packs: 2 });
@@ -162,12 +163,20 @@ test("mcp: API errors come back as isError with status, error and the checkout h
     assert.equal(buy.json["credits"], 20000);
     assert.deepEqual(t.calls[0]?.body, { packs: 2 });
     const dry = await t.call("verify_email", { email: "a@good.test" });
-    assert.equal(dry.isError, true);
-    assert.deepEqual(dry.json, { error: "insufficient_credits", status: 402, message: "dry", checkout_hint: "buy more" });
+    assert.equal(dry.isError, false, "out of credits still returns the DNS-tier verdict");
+    assert.equal(dry.json["action"], "send");
+    assert.match(String(dry.json["reason"]), /not probed: no credits left/);
+    const o = dry.json["out_of_credits"] as Record<string, unknown>;
+    assert.equal(o["checkout_url"], "https://api.test/v1/buy/1-ab");
+    assert.equal(o["not_probed"], 1);
+    assert.match(String(o["next_step"]), /^Show checkout_url to your operator: a person pays there/);
+    const revoked = await t.call("balance");
+    assert.equal(revoked.isError, true);
+    assert.deepEqual(revoked.json, { error: "key_revoked", status: 403, message: "revoked" });
     const bad = await t.call("buy_credits", { packs: 0 });
     assert.equal(bad.isError, true, "the schema rejects packs < 1");
     assert.match(String(bad.json["raw"]), /packs/);
-    assert.equal(t.calls.length, 2, "nothing was sent for the rejected call");
+    assert.equal(t.calls.length, 3, "nothing was sent for the rejected call");
   } finally {
     await t.close();
   }
