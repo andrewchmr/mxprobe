@@ -4,6 +4,7 @@
 import net from "node:net";
 import { randomBytes } from "node:crypto";
 import { resolveOptions, type VerifierOptions } from "./options.ts";
+import { mailProvider } from "./provider.ts";
 import type { SmtpCheck, Verdict } from "./types.ts";
 import { errorCode, errorMessage, withTimeout } from "./util.ts";
 
@@ -133,6 +134,15 @@ const refused = (reason: string): ProbeResult => ({ verdict: "WEAK", reason, smt
 const deferred = (reason: string): ProbeResult => ({ verdict: "WEAK", reason, smtp: "deferred", catchAll: null });
 const timedOut = (code: string | undefined): { timedOut?: boolean } => (code === "ETIMEDOUT" ? { timedOut: true } : {});
 
+// Google Workspace answers 250 to RCPT TO for any local part on every domain
+// it hosts, from any prober (tested 2026-11 from two networks), while consumer
+// Gmail rejects unknown users. So it is Google's behaviour, not a catch-all the
+// domain owner set up; the reason says so.
+const catchAllReason = (domain: string, mxHost: string): string =>
+  mailProvider(mxHost, domain) === "google_workspace"
+    ? `${mxHost} (Google Workspace) accepts any address on ${domain} over SMTP, so the mailbox cannot be proven`
+    : `${domain} is catch-all: ${mxHost} accepts any local part, so the mailbox cannot be proven`;
+
 // The catch-all test: RCPT TO a random local part. MAIL FROM:<> marks a bounce,
 // and a bounce has one recipient, so some servers refuse a second RCPT TO in
 // that transaction. With the null sender the test gets a transaction of its
@@ -177,7 +187,7 @@ export async function probeMailbox(email: string, domain: string, mxHost: string
     if (r.code === 250 || r.code === 251) {
       const catchAll = opts.catchAll ?? (await acceptsAnyLocalPart(s, domain, o.from));
       if (catchAll === null) result = { verdict: "WEAK", reason: `mailbox accepted by ${mxHost}, but the catch-all test could not run`, smtp: "accepted", catchAll: null };
-      else if (catchAll) result = { verdict: "WEAK", reason: `${domain} is catch-all: ${mxHost} accepts any local part, so the mailbox cannot be proven`, smtp: "accepted", catchAll: true };
+      else if (catchAll) result = { verdict: "WEAK", reason: catchAllReason(domain, mxHost), smtp: "accepted", catchAll: true };
       else result = { verdict: "OK", reason: `mailbox accepted by ${mxHost}`, smtp: "accepted", catchAll: false };
     } else if (r.code >= 500 && DISABLED_MAILBOX.test(r.text)) {
       result = { verdict: "DEAD", reason: `${mxHost} says the mailbox is disabled (${firstLine(r)})`, smtp: "rejected", catchAll: null };

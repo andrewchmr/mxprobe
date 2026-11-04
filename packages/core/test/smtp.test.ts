@@ -71,6 +71,16 @@ test("probeMailbox: a catch-all server is WEAK with catchAll true", async () => 
   assert.deepEqual(result, { verdict: "WEAK", reason: "good.test is catch-all: mx1.good.test accepts any local part, so the mailbox cannot be proven", smtp: "accepted", catchAll: true });
 });
 
+test("probeMailbox: Google Workspace accepting any address says so, not that the domain is catch-all", async () => {
+  const smtp = await fakeSmtp("catchall");
+  try {
+    const result = await probeMailbox("gone@acme.test", "acme.test", "aspmx.l.google.com", local(smtp.port));
+    assert.deepEqual(result, { verdict: "WEAK", reason: "aspmx.l.google.com (Google Workspace) accepts any address on acme.test over SMTP, so the mailbox cannot be proven", smtp: "accepted", catchAll: true });
+  } finally {
+    smtp.close();
+  }
+});
+
 test("probeMailbox: 251 (will forward) counts as accepted", async () => {
   const { result } = await probe({ rcpt: (addr) => (addr === "alice@good.test" ? "251 2.1.5 User not local; will forward\r\n" : NO_USER) });
   assert.equal(result.smtp, "accepted");

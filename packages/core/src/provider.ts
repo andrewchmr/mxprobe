@@ -1,7 +1,7 @@
 // Who runs the mail server, read from the primary MX host name. Information
-// only: the verdict never reads it. It helps an agent weigh a hold: a
-// catch-all on Google Workspace is a setting of the domain, while a security
-// gateway in front of the real server often accepts any address.
+// only: the verdict never reads it. It helps an agent weigh a hold: Google
+// Workspace accepts any address over SMTP on every domain it hosts, while a
+// security gateway in front of the real server often accepts any address too.
 
 // [MX host pattern, provider]. The first match wins.
 const MX_PROVIDERS: ReadonlyArray<readonly [RegExp, string]> = [
