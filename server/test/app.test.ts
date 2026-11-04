@@ -35,7 +35,7 @@ test("signup: the happy path mails the key and grants 100 credits", async () => 
     assert.equal(t.notifier.sent.emails[0]?.to, "ops@good.test");
     assert.equal(t.notifier.sent.emails[0]?.replyTo, "hello@mxprobe.dev");
     assert.ok(t.notifier.sent.emails[0]?.text.includes(r.body.api_key));
-    assert.match(t.notifier.sent.telegrams[0] ?? "", /signup ops@good.test/);
+    assert.equal(t.notifier.sent.telegrams.length, 0, "a signup sends no Telegram ping");
     // the key is stored hashed
     const row = t.db.keyByEmail("ops@good.test");
     assert.ok(row);
@@ -53,7 +53,7 @@ test("signup: the happy path mails the key and grants 100 credits", async () => 
   }
 });
 
-test("signup: when the key email fails the response says so and Telegram is told", async () => {
+test("signup: when the key email fails the response says so", async () => {
   const t = await boot();
   t.notifier.email = async () => false;
   try {
@@ -61,7 +61,6 @@ test("signup: when the key email fails the response says so and Telegram is told
     assert.equal(r.status, 201);
     assert.equal(r.body.mailed, false);
     assert.match(r.body.message, /shown once\. Send it/);
-    assert.match(t.notifier.sent.telegrams[0] ?? "", /key email FAILED/);
   } finally {
     await t.close();
   }

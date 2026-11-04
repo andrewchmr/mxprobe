@@ -214,7 +214,6 @@ export function createApp({ db, verifier, notifier, config, fetchImpl = fetch, l
     }
     const mail = signupEmail({ key, credits: cfg.freeCredits, apiUrl: cfg.apiUrl, siteUrl: cfg.siteUrl });
     const mailed = await notifier.email({ to: email, ...mail, replyTo: "hello@mxprobe.dev" });
-    void notifier.telegram(`signup ${email} (${prefix}…) from ${ip}${mailed ? "" : ", key email FAILED"}`);
     log.info(`[signup] ${prefix} ${email} ip=${ip} mailed=${mailed}`);
     const res: SignupResponse = {
       api_key: key,
