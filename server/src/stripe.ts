@@ -48,7 +48,8 @@ export async function createCheckoutSession({ secretKey, priceId, quantity, keyI
     "line_items[0][quantity]": String(quantity),
     success_url: successUrl,
     cancel_url: cancelUrl,
-    client_reference_id: String(keyId),
+    // The key goes in metadata only. client_reference_id is left out: the
+    // webhooks of the other products of this Stripe account read it as their own id.
     "metadata[key_id]": String(keyId),
     "metadata[packs]": String(quantity),
     "payment_intent_data[description]": description,
