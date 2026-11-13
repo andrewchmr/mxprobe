@@ -275,7 +275,7 @@ test("checkout: creates a Stripe session with the key in the metadata", async ()
     assert.equal(call.body.get("line_items[0][price]"), "price_x");
     assert.equal(call.body.get("line_items[0][quantity]"), "2");
     assert.equal(call.body.get("metadata[key_id]"), String(id));
-    assert.equal(call.body.get("client_reference_id"), String(id));
+    assert.equal(call.body.get("client_reference_id"), null, "other products of the Stripe account read it as their own id");
     assert.equal(call.body.get("metadata[packs]"), "2");
     assert.equal(call.body.get("customer_email"), "ops@good.test");
     assert.equal(call.body.get("payment_method_types[0]"), "card");
@@ -321,7 +321,7 @@ test("webhook: a signed paid session adds credits once", async () => {
     const event = {
       id: "evt_1",
       type: "checkout.session.completed",
-      data: { object: { id: "cs_1", payment_status: "paid", amount_total: 1800, currency: "usd", client_reference_id: String(keyId), metadata: { key_id: String(keyId), packs: "2" } } },
+      data: { object: { id: "cs_1", payment_status: "paid", amount_total: 1800, currency: "usd", metadata: { key_id: String(keyId), packs: "2" } } },
     };
     const raw = JSON.stringify(event);
     const signed = (body: string) => ({ "stripe-signature": signPayload(body, "whsec_test") });
@@ -369,6 +369,22 @@ test("webhook: a signed paid session adds credits once", async () => {
     // other event types are acknowledged and ignored
     const other = JSON.stringify({ id: "evt_other", type: "payment_intent.created", data: { object: {} } });
     assert.deepEqual((await t.api("POST", "/v1/stripe/webhook", other, signed(other))).body, { received: true });
+
+    // A paid session of another product of the same Stripe account: its client_reference_id is that
+    // product's own id, here the same number as our key. It adds no credits and is not sent again.
+    const before = t.db.keyByEmail("ops@good.test")?.credits;
+    const mails = t.notifier.sent.emails.length;
+    for (const [id, object] of [
+      ["evt_foreign_1", { id: "cs_sub", mode: "subscription", payment_status: "paid", amount_total: 0, currency: "usd", client_reference_id: String(keyId), metadata: {} }],
+      ["evt_foreign_2", { id: "cs_uuid", payment_status: "paid", amount_total: 2900, currency: "usd", client_reference_id: "0b6d1d0e-6a53-4c58-9a51-3a1d4f1f2c77" }],
+    ] as const) {
+      const foreign = JSON.stringify({ id, type: "checkout.session.completed", data: { object } });
+      const f = await t.api("POST", "/v1/stripe/webhook", foreign, signed(foreign));
+      assert.equal(f.status, 200);
+      assert.deepEqual(f.body, { received: true, ignored: true });
+    }
+    assert.equal(t.db.keyByEmail("ops@good.test")?.credits, before, "no credits for another product's payment");
+    assert.equal(t.notifier.sent.emails.length, mails, "and no purchase mail");
 
     // a paid session for an unknown key is a 500 and the event is released for Stripe's retry
     const ghost = JSON.stringify({ ...event, id: "evt_3", data: { object: { ...event.data.object, metadata: { key_id: "999", packs: "1" } } } });

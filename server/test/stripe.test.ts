@@ -50,7 +50,6 @@ test("createCheckoutSession: builds the form Stripe expects and returns id and u
     "line_items[0][quantity]": "3",
     success_url: "https://s/paid",
     cancel_url: "https://s/",
-    client_reference_id: "7",
     "metadata[key_id]": "7",
     "metadata[packs]": "3",
     "payment_intent_data[description]": "d",

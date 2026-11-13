@@ -102,7 +102,6 @@ interface StripeCheckoutSession {
   payment_status?: string;
   amount_total?: number | null;
   currency?: string | null;
-  client_reference_id?: string | null;
   metadata?: Record<string, string | undefined>;
 }
 
@@ -392,9 +391,16 @@ export function createApp({ db, verifier, notifier, config, fetchImpl = fetch, l
     try {
       if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
         const s = event.data?.object ?? {};
+        // The Stripe account has other products (CMS Brew, mxgate), and this
+        // endpoint gets their checkout sessions too. Ours carry the key in
+        // metadata.key_id; a session without it is not ours. Never read
+        // client_reference_id: another product's id there once paid out
+        // credits to the key with the same number.
+        const ownKey = s.metadata?.["key_id"];
+        if (ownKey === undefined) return [200, { received: true, ignored: true }];
         // "no_payment_required" is what Stripe sends when a 100% promotion brings the total to zero.
         if (s.payment_status === "paid" || s.payment_status === "no_payment_required") {
-          const keyId = Number(s.metadata?.["key_id"] ?? s.client_reference_id);
+          const keyId = Number(ownKey);
           const packs = Number(s.metadata?.["packs"] ?? 1);
           const k = db.keyById(keyId);
           if (!k) throw new Error(`webhook: no key with id ${keyId}`);
